@@ -1,0 +1,143 @@
+{
+  "events": [
+    {
+      "id": "seed_1",
+      "title": "Sunset Concert in the Park",
+      "description": "An evening of live music at the Bandshell with local artists.",
+      "startsAt": "2025-08-10T18:00:00-07:00",
+      "endsAt": "2025-08-10T20:00:00-07:00",
+      "venue": {
+        "name": "Golden Gate Park Bandshell",
+        "lat": 37.7691,
+        "lng": -122.4835,
+        "address": "Music Concourse Dr, San Francisco, CA"
+      },
+      "categories": ["music", "outdoor"],
+      "tags": ["free", "family"],
+      "priceMin": 0,
+      "priceMax": 0,
+      "currency": "USD",
+      "isFree": true,
+      "ticketUrl": null,
+      "imageUrl": "https://picsum.photos/seed/park/800/450",
+      "source": { "label": "SF Rec & Park", "url": "https://example.com/rec-park" },
+      "sourceConfidence": 0.86
+    },
+    {
+      "id": "seed_2",
+      "title": "Ferry Building Farmers Market",
+      "description": "Fresh produce, artisanal goods, and street food by the Bay.",
+      "startsAt": "2025-08-09T09:00:00-07:00",
+      "endsAt": "2025-08-09T13:00:00-07:00",
+      "venue": {
+        "name": "Ferry Building",
+        "lat": 37.7955,
+        "lng": -122.3937,
+        "address": "1 Ferry Building, San Francisco, CA"
+      },
+      "categories": ["market", "food"],
+      "tags": ["outdoor", "family"],
+      "priceMin": 0,
+      "priceMax": 0,
+      "currency": "USD",
+      "isFree": true,
+      "ticketUrl": null,
+      "imageUrl": "https://picsum.photos/seed/ferry/800/450",
+      "source": { "label": "CUESA", "url": "https://example.com/ferry-market" },
+      "sourceConfidence": 0.9
+    },
+    {
+      "id": "seed_3",
+      "title": "Neighborhood Art Walk",
+      "description": "Galleries and studios open late with special exhibits.",
+      "startsAt": "2025-08-09T18:00:00-07:00",
+      "endsAt": "2025-08-09T22:00:00-07:00",
+      "venue": {
+        "name": "Mission District",
+        "lat": 37.7599,
+        "lng": -122.4148,
+        "address": "Valencia St, San Francisco, CA"
+      },
+      "categories": ["arts", "community"],
+      "tags": ["night", "outdoor"],
+      "priceMin": 0,
+      "priceMax": 20,
+      "currency": "USD",
+      "isFree": true,
+      "ticketUrl": null,
+      "imageUrl": "https://picsum.photos/seed/artwalk/800/450",
+      "source": { "label": "Mission Arts", "url": "https://example.com/arts" },
+      "sourceConfidence": 0.7
+    },
+    {
+      "id": "seed_4",
+      "title": "Tech Meetup: JS in the Wild",
+      "description": "Talks on modern JS tooling and networking.",
+      "startsAt": "2025-08-11T19:00:00-07:00",
+      "endsAt": "2025-08-11T21:00:00-07:00",
+      "venue": {
+        "name": "SoMa Co-working",
+        "lat": 37.7786,
+        "lng": -122.4059,
+        "address": "123 5th St, San Francisco, CA"
+      },
+      "categories": ["tech"],
+      "tags": [],
+      "priceMin": 10,
+      "priceMax": 25,
+      "currency": "USD",
+      "isFree": false,
+      "ticketUrl": "https://example.com/tickets/js-meetup",
+      "imageUrl": "https://picsum.photos/seed/tech/800/450",
+      "source": { "label": "Meetup", "url": "https://example.com/meetup" },
+      "sourceConfidence": 0.65
+    },
+    {
+      "id": "seed_5",
+      "title": "Giants vs. Dodgers",
+      "description": "Classic NL West rivalry at Oracle Park.",
+      "startsAt": "2025-08-12T18:45:00-07:00",
+      "endsAt": "2025-08-12T22:00:00-07:00",
+      "venue": {
+        "name": "Oracle Park",
+        "lat": 37.7786,
+        "lng": -122.3893,
+        "address": "24 Willie Mays Plaza, San Francisco, CA"
+      },
+      "categories": ["sports"],
+      "tags": [],
+      "priceMin": 25,
+      "priceMax": 120,
+      "currency": "USD",
+      "isFree": false,
+      "ticketUrl": "https://example.com/tickets/giants",
+      "imageUrl": "https://picsum.photos/seed/baseball/800/450",
+      "source": { "label": "MLB", "url": "https://example.com/mlb" },
+      "sourceConfidence": 0.95
+    },
+    {
+      "id": "seed_6",
+      "title": "Food Truck Friday",
+      "description": "Rotating lineup of the city's best food trucks.",
+      "startsAt": "2025-08-15T11:30:00-07:00",
+      "endsAt": "2025-08-15T14:00:00-07:00",
+      "venue": {
+        "name": "Civic Center Plaza",
+        "lat": 37.7793,
+        "lng": -122.4187,
+        "address": "355 McAllister St, San Francisco, CA"
+      },
+      "categories": ["food", "community"],
+      "tags": ["outdoor", "family"],
+      "priceMin": 5,
+      "priceMax": 20,
+      "currency": "USD",
+      "isFree": false,
+      "ticketUrl": null,
+      "imageUrl": "https://picsum.photos/seed/foodtruck/800/450",
+      "source": { "label": "Off the Grid", "url": "https://example.com/otg" },
+      "sourceConfidence": 0.8
+    }
+  ],
+  "lastUpdated": "2025-08-09T12:00:00-07:00"
+}

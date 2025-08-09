@@ -1,0 +1,87 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums as specified in the project spec
+enum EventStatus {
+  ACTIVE
+  CANCELED
+  SOLD_OUT
+}
+
+enum SourceKind {
+  OFFICIAL_CAL
+  BLOG
+  TICKET_SITE
+  MEDIA
+  AGGREGATOR
+  SOCIAL
+}
+
+// Event model with all fields from project specification
+model Event {
+  id          String      @id @default(cuid())
+  title       String
+  description String?
+  startsAt    DateTime
+  endsAt      DateTime?
+  tz          String      @default("America/Los_Angeles")
+  priceMin    Float?
+  priceMax    Float?
+  currency    String?     @default("USD")
+  isFree      Boolean     @default(false)
+  ticketUrl   String?
+  imageUrl    String?
+  status      EventStatus @default(ACTIVE)
+
+  // Denormalized venue data for speed
+  venueName String?
+  address   String?
+  lat       Float?
+  lng       Float?
+
+  // Categories and tags as string arrays
+  categories String[]
+  tags       String[]
+
+  // Source relationship and metadata
+  sourceId         String
+  source           Source @relation(fields: [sourceId], references: [id])
+  sourceConfidence Float  @default(0.6)
+  sourceHash       String @unique // title|start|venueName normalized
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Indexes for performance
+  @@index([startsAt])
+  @@index([lat, lng])
+  @@index([sourceHash])
+  @@index([status])
+  @@index([categories])
+}
+
+// Source model for tracking data sources
+model Source {
+  id       String     @id @default(cuid())
+  url      String     @unique
+  label    String
+  kind     SourceKind
+  lastSeen DateTime?
+  events   Event[]
+
+  @@index([kind])
+  @@index([lastSeen])
+}

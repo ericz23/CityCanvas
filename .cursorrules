@@ -1,0 +1,12 @@
+# Coding Style & Behavior Rules for Cursor
+
+rules:
+  - Keep code efficient, concise, and easy to read.
+  - Avoid unnecessary abstraction, boilerplate, or overengineering.
+  - Use the simplest solution that meets requirements.
+  - Minimize dependencies unless they add significant value.
+  - Prefer clear, direct logic over clever or complex constructs.
+  - Follow DRY (Don’t Repeat Yourself) without sacrificing readability.
+  - Write only as much code as is needed—no speculative features.
+  - Include short, relevant comments for non-obvious logic only.
+  - Avoid hardcoding things that can be generalized. 

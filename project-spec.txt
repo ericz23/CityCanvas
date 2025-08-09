@@ -1,0 +1,286 @@
+SF Event Tracker — MVP Spec (v0.1)
+Product
+Map-first web app for upcoming public events in San Francisco. Pins on a map show events within a chosen time window. Users filter by category, date, and price; click a pin to see details with a link to the source/tickets. Data auto-refreshes on a schedule.
+In-Scope (MVP)
+Map UI (SF bounds) with clustered pins
+
+
+Filters: date range (Today / 3d / 7d / Custom), categories, price (Free / <$20 / $20–$50 / $50+), text search
+
+
+Event detail drawer: title, time, venue, price, description, source/ticket link, image (optional)
+
+
+Auto-refresh: backend ingestion job on a fixed cadence; UI shows “Last updated”
+
+
+Basic dedupe & confidence score
+
+
+Admin-only manual “Re-run ingest” endpoint
+
+
+Out of Scope (MVP)
+Auth, saving/favoriting, notifications, multi-city, social/trending, organizer/venue pages.
+
+Architecture (minimum viable)
+Frontend: Next.js (App Router) + TypeScript + Tailwind + shadcn/ui
+
+
+Map: Mapbox GL JS or Leaflet + MapTiler
+
+
+Backend: Next.js API routes (Node runtime)
+
+
+DB: Postgres (Neon/Vercel Postgres) via Prisma
+
+
+Cache: Upstash Redis (search/LLM/geocode caching)
+
+
+Jobs: Vercel Cron (e.g., every 3h)
+
+
+Search/HTML: SerpAPI/Tavily for URLs; node-fetch; Browserless only if needed
+
+
+LLM: JSON-mode model for extraction to schema
+
+
+Geocoding: Mapbox Geocoding (cache results)
+
+
+
+Minimal Data Model (Prisma)
+enum EventStatus { ACTIVE CANCELED SOLD_OUT }
+enum SourceKind { OFFICIAL_CAL BLOG TICKET_SITE MEDIA AGGREGATOR SOCIAL }
+
+model Event {
+  id        String   @id @default(cuid())
+  title     String
+  description String?
+  startsAt  DateTime
+  endsAt    DateTime?
+  tz        String    @default("America/Los_Angeles")
+  priceMin  Float?
+  priceMax  Float?
+  currency  String?   // "USD"
+  isFree    Boolean   @default(false)
+  ticketUrl String?
+  imageUrl  String?
+  status    EventStatus @default(ACTIVE)
+
+  // denormalized for speed
+  venueName String?
+  address   String?
+  lat       Float?
+  lng       Float?
+
+  categories String[] // ["music","festival"]
+  tags       String[] // ["free","outdoor"]
+
+  sourceId   String
+  source     Source   @relation(fields: [sourceId], references: [id])
+  sourceConfidence Float @default(0.6)
+  sourceHash String   @unique // title|start|venueName normalized
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Source {
+  id       String   @id @default(cuid())
+  url      String   @unique
+  label    String
+  kind     SourceKind
+  lastSeen DateTime?
+  events   Event[]
+}
+Categories (seed slugs): music, festival, parade, food, arts, tech, sports, family, market, community
+ Tags (seed slugs): free, outdoor, indoor, night
+
+APIs (UI-facing)
+GET /api/events
+Query:
+ bbox=minLng,minLat,maxLng,maxLat • start • end • categories • price (free|lt20|20to50|gt50) • q • limit (<=200) • cursor
+ Response
+{
+  "events": [{
+    "id":"evt_1","title":"Sunset Concert",
+    "startsAt":"2025-08-10T18:00:00-07:00","endsAt":"2025-08-10T20:00:00-07:00",
+    "venue":{"name":"Golden Gate Park Bandshell","lat":37.7691,"lng":-122.4835,"address":"Music Concourse Dr"},
+    "categories":["music","outdoor"],"tags":["free"],"isFree":true,"priceMin":0,"priceMax":0,"currency":"USD",
+    "ticketUrl":null,"imageUrl":null,
+    "source":{"label":"SF Rec & Park","url":"https://..."},
+    "sourceConfidence":0.86
+  }],
+  "nextCursor": null,
+  "lastUpdated":"2025-08-09T12:00:00-07:00"
+}
+GET /api/categories
+Returns { categories: [...], tags: [...] }.
+POST /api/ingest/run (admin-only)
+Body: { "city":"san-francisco","dryRun":false } → returns { jobId, discovered, parsed, upserted }.
+
+Ingestion Pipeline (MVP)
+Seed search (config-driven queries):
+
+
+events san francisco this week, sf concerts august 2025, free events sf weekend, venue-specific queries.
+
+
+Store unique URLs in Source with kind guess.
+
+
+Fetch: GET HTML (render via Browserless only when needed). Cache HTML checksum.
+
+
+Parse:
+
+
+Try JSON-LD (schema.org/Event) / microformats first.
+
+
+Fallback to LLM extraction (strict JSON).
+
+
+Normalize:
+
+
+TZ → America/Los_Angeles; ensure future dates; parse price; detect isFree.
+
+
+Geocode if missing lat/lng; cache results.
+
+
+Deduplicate:
+
+
+sourceHash = normalize(title)|startDateUTC|venueName|city
+
+
+Fuzzy within ±24h and 250m radius; prefer official/ticket sites.
+
+
+Score:
+
+
+Confidence = source-type weight + ticket URL present + multi-source agreement.
+
+
+Upsert to DB.
+
+
+Schedule: Vercel Cron every 3 hours; daily deeper run at 03:00 PT.
+
+
+
+LLM Extraction (concise)
+System
+Extract public event data for San Francisco. Output STRICT JSON per schema.
+No hallucinations; unknown fields = null. Convert times to America/Los_Angeles.
+User Template
+SOURCE_URL: {{url}}
+
+CONTENT (truncated):
+{{text}}
+
+JSON SCHEMA:
+{
+  "type":"object",
+  "properties":{
+    "events":{"type":"array","items":{
+      "type":"object","required":["title","startsAt"],
+      "properties":{
+        "title":{"type":"string"},
+        "description":{"type":["string","null"]},
+        "startsAt":{"type":"string","format":"date-time"},
+        "endsAt":{"type":["string","null"],"format":"date-time"},
+        "venueName":{"type":["string","null"]},
+        "address":{"type":["string","null"]},
+        "priceMin":{"type":["number","null"]},
+        "priceMax":{"type":["number","null"]},
+        "currency":{"type":["string","null"]},
+        "isFree":{"type":"boolean"},
+        "ticketUrl":{"type":["string","null"],"format":"uri"},
+        "imageUrl":{"type":["string","null"],"format":"uri"},
+        "categories":{"type":"array","items":{"type":"string"}},
+        "sourceUrl":{"type":"string","format":"uri"}
+}}}},
+  "required":["events"]
+}
+Return JSON only.
+Post-process: map categories to slugs; clamp durations; drop items outside SF bbox.
+
+UI Brief (paste into Vercel v0)
+Layout: Left filter panel (drawer on mobile) + right map (full height). Header with app name + “Last updated”.
+
+
+Filters: Date range (Today/3d/7d/Custom), category chips (multi), price radio (Free/<$20/$20–$50/$50+), text search.
+
+
+Map: SF-centered, marker clusters; clicking a pin opens a detail drawer (title, date/time, venue map snippet, description, price, buttons: “Tickets”, “Source”).
+
+
+Data: Fetch /api/events on map move & filter change (debounced). URL reflects filters via query params.
+
+
+States: skeleton loaders; empty state (“No events in this area/time”).
+
+
+Style: Tailwind + shadcn/ui; neutral palette; rounded cards; accessible focus states.
+
+
+
+Operational Bits
+Env/config: MAPBOX_TOKEN, SEARCH_API_KEY, LLM_API_KEY, MAPBOX_GEOCODE_KEY, DATABASE_URL, REDIS_URL.
+
+
+Cron: */180 * * * * (every 3h), plus daily deep crawl.
+
+
+Rate limits: /api/events 60 req/min per IP (Upstash).
+
+
+
+Testing (MVP-level)
+Unit: price/time parsing, slug mapping, hash/dedupe.
+
+
+Integration: mock HTML → LLM JSON → normalized event → DB upsert.
+
+
+UI: cypress smoke (filters update URL; map → drawer opens).
+
+
+
+Success Criteria
+≥ 200 unique SF events for the next 14 days after a deep crawl.
+
+
+/api/events P95 < 500ms (with cache) for 2k markers.
+
+
+Dedupe false positives < 5%; obvious double listings minimized.
+
+
+Smooth map interaction on mid-range laptop/mobile.
+
+
+
+Milestones
+Week 1: Scaffold Next.js, DB schema, seed categories, /api/events, minimal map + filters with seed data.
+
+
+Week 2: Search + HTML parse + JSON-LD; geocoding; upsert; basic dedupe.
+
+
+Week 3: LLM fallback extraction + caching; cron jobs; confidence scoring.
+
+
+Week 4: Polish UI/empty states; rate limits; basic telemetry; QA.
+
+
+That’s the tight MVP spec you can ship with. Want me to generate starter code stubs for Prisma + the three API routes + a Map/Filters page?
+
