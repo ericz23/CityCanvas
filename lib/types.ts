@@ -45,6 +45,8 @@ export type EventsApiResponse = {
 export type CategoriesApiResponse = {
   categories: Array<{ slug: string; name: string }>
   tags: Array<{ slug: string; name: string }>
+  usedCategories?: string[]
+  usedTags?: string[]
 }
 
 // Bounding box type for geographic queries
