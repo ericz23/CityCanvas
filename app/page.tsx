@@ -110,12 +110,14 @@ export default function Page() {
         const res = await fetch(`/api/events?${params.toString()}`, { cache: "no-store" })
         if (!res.ok) throw new Error("Failed to fetch events")
         const data = await res.json()
+        console.log("Fetched events:", data.events?.length || 0, "events")
         setEvents(data.events ?? [])
         setLastUpdated(data.lastUpdated ?? null)
         if (opts?.showToast) {
           toast({ title: "Refreshed", description: "Event list updated." })
         }
       } catch (err: any) {
+        console.error("Error fetching events:", err)
         toast({ title: "Error", description: err?.message ?? "Failed to load events", variant: "destructive" })
       } finally {
         setLoading(false)
@@ -199,82 +201,104 @@ export default function Page() {
         }
       />
       <main className="flex-1 grid md:grid-cols-[360px_1fr]">
-        <section className="border-b md:border-b-0 md:border-r bg-muted/30">
-          <div className="h-full max-h-[50vh] md:max-h-none overflow-auto">
-            <FiltersPanel
-              value={filters}
-              onChange={setFilters}
-              autoRefreshMs={autoRefreshMs}
-              onChangeAutoRefresh={setAutoRefreshMs}
-            />
-            <div className="px-4 pb-4">
-              <Card>
-                <CardContent className="p-0">
-                  <div className="p-4 border-b">
-                    <div className="text-sm text-muted-foreground">
-                      {"Showing "}
-                      <span className="font-medium text-foreground">{events.length}</span>
-                      {" events in view"}
-                    </div>
-                  </div>
-                  <div className="max-h-[40vh] md:max-h-[calc(100vh-22rem)] overflow-auto p-2">
-                    {loading ? (
-                      <div className="space-y-3 p-2">
-                        {Array.from({ length: 6 }).map((_, i) => (
-                          <div key={i} className="flex gap-3">
-                            <Skeleton className="h-16 w-16 rounded-md" />
-                            <div className="flex-1 space-y-2">
-                              <Skeleton className="h-4 w-2/3" />
-                              <Skeleton className="h-3 w-1/2" />
-                              <Skeleton className="h-3 w-1/3" />
-                            </div>
-                          </div>
-                        ))}
+        {/* Left sidebar with filters and events */}
+        <div className="flex flex-col h-full">
+          {/* Filters section - fixed height, independent scroll */}
+          <section className="border-b md:border-b-0 md:border-r bg-muted/30 flex-shrink-0">
+            <div className="h-64 md:h-80 overflow-auto">
+              <FiltersPanel
+                value={filters}
+                onChange={setFilters}
+                autoRefreshMs={autoRefreshMs}
+                onChangeAutoRefresh={setAutoRefreshMs}
+              />
+            </div>
+          </section>
+          
+          {/* Events list section - takes remaining height, independent scroll */}
+          <section className="border-b md:border-b-0 md:border-r bg-muted/30 flex-1 overflow-hidden">
+            <div className="h-full overflow-auto">
+              <div className="px-4 pb-4">
+                <Card>
+                  <CardContent className="p-0">
+                    <div className="p-4 border-b">
+                      <div className="text-sm text-muted-foreground">
+                        {"Showing "}
+                        <span className="font-medium text-foreground">{events.length}</span>
+                        {" events in view"}
                       </div>
-                    ) : events.length === 0 ? (
-                      <EmptyState />
-                    ) : (
-                      <ul className="divide-y">
-                        {events.map((ev) => (
-                          <li key={ev.id}>
-                            <button
-                              className="w-full text-left p-3 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
-                              onClick={() => setSelected(ev)}
-                              aria-label={`Open details for ${ev.title}`}
-                            >
-                              <div className="flex gap-3">
-                                <img
-                                  src={
-                                    ev.imageUrl ??
-                                    ("/placeholder.svg?height=64&width=96&query=san%20francisco%20event%20thumbnail" ||
-                                      "/placeholder.svg")
-                                  }
-                                  alt={ev.title}
-                                  className="h-16 w-24 object-cover rounded-md border"
-                                  loading="lazy"
-                                />
-                                <div className="flex-1">
-                                  <div className="font-medium">{ev.title}</div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {new Date(ev.startsAt).toLocaleString()}
-                                    {ev.venue?.name ? ` • ${ev.venue.name}` : ""}
-                                  </div>
-                                  <div className="mt-1 text-xs">
-                                    {ev.isFree ? "Free" : formatPriceRange(ev.priceMin, ev.priceMax, ev.currency)}
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Click any event to view details
+                      </div>
+                    </div>
+                    <div className="p-2">
+                      {loading ? (
+                        <div className="space-y-3 p-2">
+                          {Array.from({ length: 6 }).map((_, i) => (
+                            <div key={i} className="flex gap-3">
+                              <Skeleton className="h-16 w-16 rounded-md" />
+                              <div className="flex-1 space-y-2">
+                                <Skeleton className="h-4 w-2/3" />
+                                <Skeleton className="h-3 w-1/2" />
+                                <Skeleton className="h-3 w-1/3" />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : events.length === 0 ? (
+                        <EmptyState />
+                      ) : (
+                        <ul className="divide-y">
+                          {events.map((ev) => (
+                            <li key={ev.id}>
+                              <button
+                                className="w-full text-left p-3 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm transition-colors duration-200 cursor-pointer group"
+                                style={{
+                                  backgroundColor: selected && selected.id === ev.id ? 'var(--muted)' : undefined,
+                                  boxShadow: selected && selected.id === ev.id ? '0 0 0 2px var(--ring)' : undefined
+                                }}
+                                onClick={() => {
+                                  console.log("Event clicked:", ev.title)
+                                  setSelected(ev)
+                                }}
+                                aria-label={`Open details for ${ev.title}`}
+                              >
+                                <div className="flex gap-3">
+                                  <img
+                                    src={
+                                      ev.imageUrl ??
+                                      ("/placeholder.svg?height=64&width=96&query=san%20francisco%20event%20thumbnail" ||
+                                        "/placeholder.svg")
+                                    }
+                                    alt={ev.title}
+                                    className="h-16 w-24 object-cover rounded-md border"
+                                    loading="lazy"
+                                  />
+                                  <div className="flex-1">
+                                    <div className="font-medium">{ev.title}</div>
+                                    <div className="text-xs text-muted-foreground">
+                                      {new Date(ev.startsAt).toLocaleString()}
+                                      {ev.venue?.name ? ` • ${ev.venue.name}` : ""}
+                                    </div>
+                                    <div className="mt-1 text-xs">
+                                      {ev.isFree ? "Free" : formatPriceRange(ev.priceMin, ev.priceMax, ev.currency)}
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        </div>
+        
+        {/* Map section */}
         <section className="relative">
           <MapView
             events={events}

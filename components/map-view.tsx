@@ -38,7 +38,26 @@ function toFeature(ev: ApiEvent): Feature {
   }
 }
 
-export function MapView({ events, onMarkerClick, onBoundsChange, initialBounds, loading }: Props) {
+// Wrapper component to handle SSR
+function MapViewWrapper(props: Props) {
+  const [isClient, setIsClient] = useState(false)
+
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
+
+  if (!isClient) {
+    return (
+      <div className="absolute inset-0 flex items-center justify-center bg-muted/30">
+        <div className="text-muted-foreground">Loading map...</div>
+      </div>
+    )
+  }
+
+  return <MapViewComponent {...props} />
+}
+
+function MapViewComponent({ events, onMarkerClick, onBoundsChange, initialBounds, loading }: Props) {
   const center = useMemo(() => {
     const lat = (initialBounds.minLat + initialBounds.maxLat) / 2
     const lng = (initialBounds.minLng + initialBounds.maxLng) / 2
@@ -194,7 +213,10 @@ function Markers({
       } else {
         const ev = (f.properties as any).event as ApiEvent
         const marker = L.marker([lat, lng], { icon: pinIcon() })
-        marker.on("click", () => onPointClick(ev))
+        marker.on("click", () => {
+          console.log("Map marker clicked:", ev.title)
+          onPointClick(ev)
+        })
         marker.addTo(layerGroup)
       }
     })
@@ -250,9 +272,12 @@ function clusterIcon(count: number): DivIcon {
 
 function pinIcon(): DivIcon {
   const html = `
-    <div class="relative">
-      <div class="bg-emerald-600 ring-2 ring-white rounded-full shadow-md" style="width:14px;height:14px;"></div>
+    <div class="relative cursor-pointer">
+      <div class="bg-emerald-600 ring-2 ring-white rounded-full shadow-lg hover:bg-emerald-500 transition-colors duration-200" style="width:20px;height:20px;"></div>
     </div>
   `
-  return L.divIcon({ html, className: "pin-icon", iconSize: [14, 14] as any })
+  return L.divIcon({ html, className: "pin-icon", iconSize: [20, 20] as any })
 }
+
+// Export the wrapper component
+export { MapViewWrapper as MapView }
