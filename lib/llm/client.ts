@@ -182,7 +182,8 @@ export class LLMClient {
   }
 
   private getSystemPrompt(): string {
-    const currentYear = new Date().getFullYear()
+    const currentDate = new Date()
+    const currentYear = currentDate.getFullYear()
     return `You are an expert at extracting event information from individual event posts. 
 
 Extract event data and output it as valid JSON following this exact schema:
@@ -207,7 +208,7 @@ Extract event data and output it as valid JSON following this exact schema:
 
 IMPORTANT RULES:
 1. Only extract events that are happening in San Francisco or the Bay Area
-2. Only extract future events (not past events)
+2. Only extract future events (not past events - the current date is ${currentDate})
 3. Convert all times to America/Los_Angeles timezone
 4. If you can't determine a field, use null
 5. Don't hallucinate - only extract what's clearly stated
@@ -219,7 +220,8 @@ IMPORTANT RULES:
   }
 
   private buildPostPrompt(post: EventPost, sourceUrl: string): string {
-    const currentYear = new Date().getFullYear()
+    const currentDate = new Date()
+    const currentYear = currentDate.getFullYear()
     return `SOURCE_URL: ${sourceUrl}
 
 EVENT POST CONTENT:
@@ -236,6 +238,7 @@ Extract event information from this post. Look for:
 
 DATE HANDLING RULES:
 - Current year is ${currentYear}
+- Current date is ${currentDate}
 - If a date is mentioned without a year, assume it's ${currentYear} or ${currentYear + 1} (whichever makes it a future date)
 - If only month/day is given, use ${currentYear} unless that would make it a past date, then use ${currentYear + 1}
 - Only extract future events, not past events
