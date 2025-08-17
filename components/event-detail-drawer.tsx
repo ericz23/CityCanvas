@@ -4,17 +4,21 @@ import Link from "next/link"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ExternalLink, Ticket, MapPin, Calendar, Clock, DollarSign } from "lucide-react"
+import { ExternalLink, Ticket, MapPin, Calendar, Clock, DollarSign, ArrowLeft } from "lucide-react"
 import type { ApiEvent } from "@/lib/types"
 
 export function EventDetailDrawer({
   event,
   open,
   onOpenChange,
+  onBackToCluster,
+  showBackButton = false,
 }: {
   event: ApiEvent | null
   open: boolean
   onOpenChange: (o: boolean) => void
+  onBackToCluster?: () => void
+  showBackButton?: boolean
 }) {
   if (!event) return null
 
@@ -52,6 +56,17 @@ export function EventDetailDrawer({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full sm:max-w-2xl lg:max-w-3xl overflow-y-auto animate-in slide-in-from-right duration-300 z-[1000]">
         <div className="space-y-6 p-6">
+          {showBackButton && onBackToCluster && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onBackToCluster}
+              className="mb-4 -ml-2"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Events
+            </Button>
+          )}
           <SheetHeader className="text-left">
             <SheetTitle className="text-2xl font-bold">{event.title}</SheetTitle>
             <div className="text-base text-muted-foreground space-y-2 mt-2">

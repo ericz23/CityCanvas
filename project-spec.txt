@@ -27,7 +27,7 @@ Architecture (minimum viable)
 Frontend: Next.js (App Router) + TypeScript + Tailwind + shadcn/ui
 
 
-Map: Mapbox GL JS or Leaflet + MapTiler
+Map: Leaflet + OpenStreetMap tiles
 
 
 Backend: Next.js API routes (Node runtime)
@@ -48,7 +48,7 @@ Search/HTML: SerpAPI/Tavily for URLs; node-fetch; Browserless only if needed
 LLM: JSON-mode model for extraction to schema
 
 
-Geocoding: Mapbox Geocoding (cache results)
+Geocoding: Google Maps Geocoding API (cache results)
 
 
 
@@ -234,7 +234,7 @@ Style: Tailwind + shadcn/ui; neutral palette; rounded cards; accessible focus st
 
 
 Operational Bits
-Env/config: MAPBOX_TOKEN, SEARCH_API_KEY, LLM_API_KEY, MAPBOX_GEOCODE_KEY, DATABASE_URL, REDIS_URL.
+Env/config: GOOGLE_MAPS_API_KEY, SEARCH_API_KEY, LLM_API_KEY, DATABASE_URL, REDIS_URL.
 
 
 Cron: */180 * * * * (every 3h), plus daily deep crawl.
