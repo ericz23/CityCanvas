@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { MapView } from "@/components/map-view"
+import dynamic from "next/dynamic"
 import { FiltersPanel, type FiltersState } from "@/components/filters-panel"
 import { Header } from "@/components/header"
 import { LastUpdatedBadge } from "@/components/last-updated-badge"
@@ -14,6 +14,16 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { RefreshCw } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import type { ApiEvent } from "@/lib/types"
+
+// Dynamically import MapView to prevent SSR issues with Leaflet
+const MapView = dynamic(() => import("@/components/map-view").then(mod => ({ default: mod.MapView })), {
+  ssr: false,
+  loading: () => (
+    <div className="absolute inset-0 flex items-center justify-center bg-muted/30">
+      <div className="text-muted-foreground">Loading map...</div>
+    </div>
+  )
+})
 
 type Bounds = {
   minLng: number
@@ -158,6 +168,10 @@ export default function Page() {
 
   // Auto refresh timer
   useEffect(() => {
+    // Only run on client side
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    if (typeof window === 'undefined') return
+
     if (refreshTimerRef.current) {
       window.clearInterval(refreshTimerRef.current)
       refreshTimerRef.current = null

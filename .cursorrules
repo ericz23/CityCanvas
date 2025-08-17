@@ -10,3 +10,5 @@ rules:
   - Write only as much code as is needed—no speculative features.
   - Include short, relevant comments for non-obvious logic only.
   - Avoid hardcoding things that can be generalized. 
+  - Do not implement anything that is not explcitly asked of you to implement. 
+  - Do not overstep.
