@@ -99,14 +99,22 @@ function MapViewComponent({ events, onMarkerClick, onClusterClick, onBoundsChang
         if (f.properties.cluster_id !== undefined) {
           // Get the leaves (individual points) that make up this cluster
           const leaves = index.getLeaves(f.properties.cluster_id, Infinity)
+          const processedCoords = new Set<string>()
+          
           leaves.forEach((leaf: any) => {
             // Find the corresponding event by matching coordinates
             const leafCoords = leaf.geometry.coordinates
-            const matchingEvent = pointsWithCoords.find(event => 
+            const coordKey = `${leafCoords[0]},${leafCoords[1]}`
+            
+            // Find all events at this coordinate (not just the first one)
+            const matchingEvents = pointsWithCoords.filter(event => 
               event.venue?.lat === leafCoords[1] && event.venue?.lng === leafCoords[0]
             )
-            if (matchingEvent) {
-              clusterEvents.push(matchingEvent)
+            
+            // Only process each unique coordinate once to avoid duplicates
+            if (!processedCoords.has(coordKey)) {
+              processedCoords.add(coordKey)
+              clusterEvents.push(...matchingEvents)
             }
           })
         }

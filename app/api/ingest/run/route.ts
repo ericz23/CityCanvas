@@ -3,6 +3,7 @@ import { SearchClient } from "@/lib/search/client"
 import { HTMLFetcher } from "@/lib/fetcher/html"
 import { LLMClient } from "@/lib/llm/client"
 import { GeocodingClient } from "@/lib/geocoding/client"
+import { DeduplicationClient } from "@/lib/deduplication"
 import { PrismaClient } from "@prisma/client"
 
 const prisma = new PrismaClient()
@@ -82,12 +83,32 @@ export async function POST(req: Request) {
     
     console.log(`Geocoded ${geocodedCount} out of ${allEvents.length} events`)
     
+    // Check for duplicates using deduplication service
+    console.log('Checking for duplicates...')
+    const deduplicationClient = new DeduplicationClient()
+    let duplicateCount = 0
+    let newEvents = []
+    
+    for (const event of allEvents) {
+      const duplicateResult = await deduplicationClient.checkDuplicate(event)
+      
+      if (duplicateResult.isDuplicate) {
+        duplicateCount++
+        console.log(`🚫 Duplicate found: "${event.title}" (${Math.round(duplicateResult.confidence * 100)}% match)`)
+      } else {
+        newEvents.push(event)
+        console.log(`✅ New event: "${event.title}"`)
+      }
+    }
+    
+    console.log(`Found ${duplicateCount} duplicates, ${newEvents.length} new events`)
+    
     // Save events to database (unless dry run)
     let upsertedCount = 0
-    if (!dryRun && allEvents.length > 0) {
-      console.log('Saving events to database...')
+    if (!dryRun && newEvents.length > 0) {
+      console.log('Saving new events to database...')
       
-      for (const event of allEvents) {
+      for (const event of newEvents) {
         try {
           // Create or update source
           const source = await prisma.source.upsert({
@@ -161,8 +182,10 @@ export async function POST(req: Request) {
       fetched: fetchedContent.length,
       extracted: allEvents.length,
       geocoded: geocodedCount,
+      duplicates: duplicateCount,
+      newEvents: newEvents.length,
       upserted: upsertedCount,
-      summary: `Discovered ${urls.length} URLs, fetched ${fetchedContent.length} pages, extracted ${allEvents.length} events, geocoded ${geocodedCount} events, upserted ${upsertedCount} events`,
+      summary: `Discovered ${urls.length} URLs, fetched ${fetchedContent.length} pages, extracted ${allEvents.length} events, geocoded ${geocodedCount} events, found ${duplicateCount} duplicates, saved ${newEvents.length} new events, upserted ${upsertedCount} events`,
       sampleEvents: dryRun ? allEvents.slice(0, 3) : undefined
     })
   } catch (error) {

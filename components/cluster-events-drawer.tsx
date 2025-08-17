@@ -57,7 +57,7 @@ export function ClusterEventsDrawer({
         <div className="space-y-6 p-6">
           <SheetHeader className="text-left">
             <SheetTitle className="text-2xl font-bold">
-              {events.length} Events at {venueName}
+              {events.length} Events near {venueName}
             </SheetTitle>
             <div className="text-base text-muted-foreground mt-2">
               <div className="flex items-center gap-2">
