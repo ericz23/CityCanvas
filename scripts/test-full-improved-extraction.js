@@ -1,83 +1,42 @@
-import OpenAI from 'openai'
-import * as cheerio from 'cheerio'
+require('dotenv').config()
+const axios = require('axios')
+const cheerio = require('cheerio')
+const OpenAI = require('openai')
 
-export interface ExtractedEvent {
-  title: string
-  description?: string | null
-  startsAt: string
-  endsAt?: string | null
-  venueName?: string | null
-  address?: string | null
-  priceMin?: number | null
-  priceMax?: number | null
-  currency?: string | null
-  isFree: boolean
-  ticketUrl?: string | null
-  imageUrl?: string | null
-  categories: string[]
-  sourceUrl: string
-}
-
-interface EventPost {
-  title: string
-  description?: string | null
-  fullText: string
-  html: string
-}
-
-export class LLMClient {
-  private openai: OpenAI
-
-  constructor() {
-    this.openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
-    })
-  }
-
-  async extractEvents(content: { html: string; url: string }): Promise<ExtractedEvent[]> {
-    if (!process.env.OPENAI_API_KEY) {
-      console.warn('OPENAI_API_KEY not configured')
-      return []
-    }
-
+// HTML Fetcher
+class HTMLFetcher {
+  async fetchHTML(url) {
     try {
-      console.log(`Extracting events from: ${content.url}`)
+      console.log(`Fetching: ${url}`)
       
-      // First, extract individual event posts
-      const posts = this.extractEventPosts(content.html)
-      console.log(`Found ${posts.length} event posts`)
-      
-      // Limit to first 30 posts to avoid rate limits
-      const postsToProcess = posts.slice(0, 30)
-      console.log(`Processing first ${postsToProcess.length} posts`)
-      
-      // Process each post individually
-      const events: ExtractedEvent[] = []
-      
-      for (let i = 0; i < postsToProcess.length; i++) {
-        const post = postsToProcess[i]
-        console.log(`Processing post ${i + 1}/${postsToProcess.length}: ${post.title}`)
-        
-        const event = await this.extractEventFromPost(post, content.url)
-        if (event) {
-          events.push(event)
-        }
-        
-        // Small delay to avoid rate limiting
-        await this.delay(500)
+      const response = await axios.get(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
+        },
+        timeout: 10000,
+        maxRedirects: 5
+      })
+
+      return {
+        url,
+        html: response.data,
+        htmlLength: response.data.length
       }
       
-      console.log(`✅ Extracted ${events.length} events from ${content.url}`)
-      return events
-    } catch (error: any) {
-      console.error('LLM extraction failed:', error)
-      return []
+    } catch (error) {
+      console.error(`Failed to fetch ${url}:`, error.message)
+      return null
     }
   }
+}
 
-  private extractEventPosts(html: string): EventPost[] {
+// Event Post Extractor
+class EventPostExtractor {
+  extractEventPosts(html) {
     const $ = cheerio.load(html)
-    const posts: EventPost[] = []
+    const posts = []
     
     // Find all post elements - use broader selectors to catch all posts
     $('.post, .entry, .event, .event-item, .event-card, [class*="post"], [class*="event"], [class*="entry"]').each((index, element) => {
@@ -124,7 +83,7 @@ export class LLMClient {
           title,
           description: description || null,
           fullText: allText,
-          html: $el.html() || ''
+          html: $el.html()
         })
       }
     })
@@ -138,8 +97,59 @@ export class LLMClient {
     
     return uniquePosts
   }
+}
 
-  private async extractEventFromPost(post: EventPost, sourceUrl: string): Promise<ExtractedEvent | null> {
+// LLM Client
+class LLMClient {
+  constructor() {
+    this.openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY
+    })
+  }
+
+  async extractEvents(content) {
+    if (!process.env.OPENAI_API_KEY) {
+      console.log('OPENAI_API_KEY not configured')
+      return []
+    }
+
+    try {
+      console.log(`Extracting events from: ${content.url}`)
+      
+      // First, extract individual event posts
+      const postExtractor = new EventPostExtractor()
+      const posts = postExtractor.extractEventPosts(content.html)
+      console.log(`Found ${posts.length} event posts`)
+      
+      // Limit to first 30 posts to avoid rate limits
+      const postsToProcess = posts.slice(0, 30)
+      console.log(`Processing first ${postsToProcess.length} posts`)
+      
+      // Process each post individually
+      const events = []
+      
+      for (let i = 0; i < postsToProcess.length; i++) {
+        const post = postsToProcess[i]
+        console.log(`Processing post ${i + 1}/${postsToProcess.length}: ${post.title}`)
+        
+        const event = await this.extractEventFromPost(post, content.url)
+        if (event) {
+          events.push(event)
+        }
+        
+        // Small delay to avoid rate limiting
+        await this.delay(500)
+      }
+      
+      console.log(`✅ Extracted ${events.length} events from ${content.url}`)
+      return events
+    } catch (error) {
+      console.error('LLM extraction failed:', error)
+      return []
+    }
+  }
+
+  async extractEventFromPost(post, sourceUrl) {
     try {
       const prompt = this.buildPostPrompt(post, sourceUrl)
       
@@ -171,18 +181,17 @@ export class LLMClient {
           event.sourceUrl = sourceUrl
           return event
         }
-      } catch (error: any) {
+      } catch (error) {
         console.error('Failed to parse LLM response for post:', error)
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('LLM extraction failed for post:', error)
     }
     
     return null
   }
 
-  private getSystemPrompt(): string {
-    const currentYear = new Date().getFullYear()
+  getSystemPrompt() {
     return `You are an expert at extracting event information from individual event posts. 
 
 Extract event data and output it as valid JSON following this exact schema:
@@ -213,13 +222,10 @@ IMPORTANT RULES:
 5. Don't hallucinate - only extract what's clearly stated
 6. Return valid JSON only - no other text
 7. Map categories to these slugs: music, festival, parade, food, arts, tech, sports, family, market, community
-8. If no valid event found, return {"event": null}
-9. DATE HANDLING: Current year is ${currentYear}. If a date is mentioned without a year, assume it's ${currentYear} or ${currentYear + 1} (whichever makes it a future date)
-10. If only a month/day is given, assume the current year ${currentYear} unless that would make it a past date, then use ${currentYear + 1}`
+8. If no valid event found, return {"event": null}`
   }
 
-  private buildPostPrompt(post: EventPost, sourceUrl: string): string {
-    const currentYear = new Date().getFullYear()
+  buildPostPrompt(post, sourceUrl) {
     return `SOURCE_URL: ${sourceUrl}
 
 EVENT POST CONTENT:
@@ -229,16 +235,10 @@ Full Text: ${post.fullText.substring(0, 2000)}
 
 Extract event information from this post. Look for:
 - Event title and description
-- Date and time information (IMPORTANT: Current year is ${currentYear})
+- Date and time information
 - Venue or location
 - Pricing information (FREE, $XX, etc.)
 - Event type or category
-
-DATE HANDLING RULES:
-- Current year is ${currentYear}
-- If a date is mentioned without a year, assume it's ${currentYear} or ${currentYear + 1} (whichever makes it a future date)
-- If only month/day is given, use ${currentYear} unless that would make it a past date, then use ${currentYear + 1}
-- Only extract future events, not past events
 
 JSON SCHEMA:
 {
@@ -270,7 +270,56 @@ JSON SCHEMA:
 Return JSON only.`
   }
 
-  private delay(ms: number): Promise<void> {
+  delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms))
   }
-} 
+}
+
+async function testFullImprovedExtraction() {
+  console.log('🤖 Testing Full Improved LLM Extraction')
+  console.log('=======================================\n')
+  
+  if (!process.env.OPENAI_API_KEY) {
+    console.log('❌ OPENAI_API_KEY not found')
+    return
+  }
+  
+  console.log('✅ OPENAI_API_KEY found\n')
+  
+  const htmlFetcher = new HTMLFetcher()
+  const llmClient = new LLMClient()
+  
+  const url = 'https://sf.funcheap.com/events/san-francisco/'
+  
+  console.log(`🔗 Processing: ${url}`)
+  console.log('─'.repeat(60))
+  
+  const content = await htmlFetcher.fetchHTML(url)
+  if (!content) {
+    console.log('❌ Failed to fetch content')
+    return
+  }
+  
+  console.log(`📄 Fetched ${content.htmlLength} characters`)
+  
+  const events = await llmClient.extractEvents(content)
+  
+  console.log(`\n🎉 Final Results:`)
+  console.log(`  Events extracted: ${events.length}`)
+  
+  if (events.length > 0) {
+    console.log('\n📋 Extracted Events:')
+    events.forEach((event, index) => {
+      console.log(`\n  Event ${index + 1}:`)
+      console.log(`    Title: ${event.title}`)
+      console.log(`    Date: ${event.startsAt}`)
+      console.log(`    Venue: ${event.venueName || 'Unknown'}`)
+      console.log(`    Price: ${event.isFree ? 'Free' : `${event.priceMin || 'Unknown'}`}`)
+      console.log(`    Categories: ${event.categories.join(', ')}`)
+    })
+  }
+  
+  console.log('\n✅ Test completed!')
+}
+
+testFullImprovedExtraction().catch(console.error) 

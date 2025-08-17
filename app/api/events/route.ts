@@ -53,6 +53,14 @@ function dateRangeFromPreset(preset?: string | null): { start: Date; end: Date }
       start = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate())
       end = new Date(start.getTime() + 24 * 60 * 60 * 1000 - 1)
       break
+    case "3d":
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      end = new Date(start.getTime() + 3 * 24 * 60 * 60 * 1000)
+      break
+    case "7d":
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000)
+      break
     case "week":
       start = new Date(now.getFullYear(), now.getMonth(), now.getDate())
       end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000)
@@ -127,18 +135,6 @@ export async function GET(req: Request) {
       },
     }
 
-    // Add bounding box filter if provided
-    if (bbox) {
-      whereClause.lat = {
-        gte: bbox.minLat,
-        lte: bbox.maxLat,
-      }
-      whereClause.lng = {
-        gte: bbox.minLng,
-        lte: bbox.maxLng,
-      }
-    }
-
     // Add category filter if provided
     const cats = catsStr.split(",").filter(Boolean)
     if (cats.length > 0) {
@@ -147,7 +143,7 @@ export async function GET(req: Request) {
       }
     }
 
-    // Query database
+    // Query database (without bounding box filter)
     const dbEvents = await prisma.event.findMany({
       where: whereClause,
       include: {
@@ -161,6 +157,23 @@ export async function GET(req: Request) {
 
     // Convert to API format
     let events: ApiEvent[] = dbEvents.map(eventToApiEvent)
+
+    // Apply bounding box filter in memory (only for events with coordinates)
+    if (bbox) {
+      events = events.filter((event) => {
+        // If event has coordinates, check if they're within the bounding box
+        if (event.venue?.lat && event.venue?.lng) {
+          return (
+            event.venue.lat >= bbox.minLat &&
+            event.venue.lat <= bbox.maxLat &&
+            event.venue.lng >= bbox.minLng &&
+            event.venue.lng <= bbox.maxLng
+          )
+        }
+        // If event doesn't have coordinates, include it anyway
+        return true
+      })
+    }
 
     // Apply filters that are easier to do in memory
     if (price !== "any") {
