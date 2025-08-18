@@ -4,14 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import dynamic from "next/dynamic"
 import { FiltersPanel, type FiltersState } from "@/components/filters-panel"
+import { EventsPanel } from "@/components/events-panel"
 import { Header } from "@/components/header"
 import { LastUpdatedBadge } from "@/components/last-updated-badge"
 import { EventDetailDrawer } from "@/components/event-detail-drawer"
 import { ClusterEventsDrawer } from "@/components/cluster-events-drawer"
-import { EmptyState } from "@/components/empty-state"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Skeleton } from "@/components/ui/skeleton"
 import { RefreshCw } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import type { ApiEvent } from "@/lib/types"
@@ -224,7 +222,7 @@ export default function Page() {
   }, [])
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex h-screen flex-col">
       <Header
         right={
           <div className="flex items-center gap-2">
@@ -236,9 +234,9 @@ export default function Page() {
           </div>
         }
       />
-      <main className="flex-1 grid md:grid-cols-[360px_1fr]">
+      <main className="flex-1 grid md:grid-cols-[360px_1fr] min-h-0">
         {/* Left sidebar with filters and events */}
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col h-full min-h-0">
           {/* Filters section - fixed height, independent scroll */}
           <section className="border-b md:border-b-0 md:border-r bg-muted/30 flex-shrink-0">
             <div className="h-64 md:h-80 overflow-auto">
@@ -254,82 +252,12 @@ export default function Page() {
           {/* Events list section - takes remaining height, independent scroll */}
           <section className="border-b md:border-b-0 md:border-r bg-muted/30 flex-1 overflow-hidden">
             <div className="h-full overflow-auto">
-              <div className="px-4 pb-4">
-                <Card>
-                  <CardContent className="p-0">
-                    <div className="p-4 border-b">
-                      <div className="text-sm text-muted-foreground">
-                        {"Showing "}
-                        <span className="font-medium text-foreground">{events.length}</span>
-                        {" events in view"}
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-1">
-                        Click any event to view details
-                      </div>
-                    </div>
-                    <div className="p-2">
-                      {loading ? (
-                        <div className="space-y-3 p-2">
-                          {Array.from({ length: 6 }).map((_, i) => (
-                            <div key={i} className="flex gap-3">
-                              <Skeleton className="h-16 w-16 rounded-md" />
-                              <div className="flex-1 space-y-2">
-                                <Skeleton className="h-4 w-2/3" />
-                                <Skeleton className="h-3 w-1/2" />
-                                <Skeleton className="h-3 w-1/3" />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : events.length === 0 ? (
-                        <EmptyState />
-                      ) : (
-                        <ul className="divide-y">
-                          {events.map((ev) => (
-                            <li key={ev.id}>
-                              <button
-                                className="w-full text-left p-3 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm transition-colors duration-200 cursor-pointer group"
-                                style={{
-                                  backgroundColor: selected && selected.id === ev.id ? 'var(--muted)' : undefined,
-                                  boxShadow: selected && selected.id === ev.id ? '0 0 0 2px var(--ring)' : undefined
-                                }}
-                                onClick={() => {
-                                  console.log("Event clicked:", ev.title)
-                                  setSelected(ev)
-                                }}
-                                aria-label={`Open details for ${ev.title}`}
-                              >
-                                <div className="flex gap-3">
-                                  <img
-                                    src={
-                                      ev.imageUrl ??
-                                      ("/placeholder.svg?height=64&width=96&query=san%20francisco%20event%20thumbnail" ||
-                                        "/placeholder.svg")
-                                    }
-                                    alt={ev.title}
-                                    className="h-16 w-24 object-cover rounded-md border"
-                                    loading="lazy"
-                                  />
-                                  <div className="flex-1">
-                                    <div className="font-medium">{ev.title}</div>
-                                    <div className="text-xs text-muted-foreground">
-                                      {new Date(ev.startsAt).toLocaleString()}
-                                      {ev.venue?.name ? ` • ${ev.venue.name}` : ""}
-                                    </div>
-                                    <div className="mt-1 text-xs">
-                                      {ev.isFree ? "Free" : formatPriceRange(ev.priceMin, ev.priceMax, ev.currency)}
-                                    </div>
-                                  </div>
-                                </div>
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
+              <EventsPanel
+                events={events}
+                loading={loading}
+                selectedEvent={selected}
+                onEventSelect={setSelected}
+              />
             </div>
           </section>
         </div>
@@ -367,15 +295,4 @@ export default function Page() {
   )
 }
 
-function formatPriceRange(min?: number | null, max?: number | null, currency?: string | null) {
-  const cur = currency ?? "USD"
-  const f = (n: number) => n.toLocaleString(undefined, { style: "currency", currency: cur, maximumFractionDigits: 0 })
-  if (min != null && max != null) {
-    if (min === 0 && max === 0) return "Free"
-    if (min === max) return f(min)
-    return `${f(min)} – ${f(max)}`
-  }
-  if (min != null) return `${f(min)}+`
-  if (max != null) return `Up to ${f(max)}`
-  return "See pricing"
-}
+
