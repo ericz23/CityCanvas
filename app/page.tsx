@@ -244,34 +244,41 @@ export default function Page() {
         <ResizablePanelGroup direction="horizontal" className="h-full">
           {/* Left sidebar with filters and events - resizable width */}
           <ResizablePanel defaultSize={25} minSize={20} maxSize={50}>
-            <div className="flex flex-col h-full min-h-0">
-              {/* Filters section - fixed height, independent scroll */}
-              <section className="border-b md:border-b-0 md:border-r bg-muted/30 flex-shrink-0">
-                <div className="h-64 md:h-80 overflow-auto">
-                  <FiltersPanel
-                    value={filters}
-                    onChange={setFilters}
-                    autoRefreshMs={autoRefreshMs}
-                    onChangeAutoRefresh={setAutoRefreshMs}
-                  />
-                </div>
-              </section>
+            <ResizablePanelGroup direction="vertical" className="h-full">
+              {/* Filters section - resizable height */}
+              <ResizablePanel defaultSize={40} minSize={25} maxSize={70}>
+                <section className="border-b md:border-b-0 md:border-r bg-muted/30 h-full overflow-hidden">
+                  <div className="h-full overflow-auto">
+                    <FiltersPanel
+                      value={filters}
+                      onChange={setFilters}
+                      autoRefreshMs={autoRefreshMs}
+                      onChangeAutoRefresh={setAutoRefreshMs}
+                    />
+                  </div>
+                </section>
+              </ResizablePanel>
               
-              {/* Events list section - takes remaining height, independent scroll */}
-              <section className="border-b md:border-b-0 md:border-r bg-muted/30 flex-1 overflow-hidden">
-                <div className="h-full overflow-auto">
-                  <EventsPanel
-                    events={events}
-                    loading={loading}
-                    selectedEvent={selected}
-                    onEventSelect={setSelected}
-                  />
-                </div>
-              </section>
-            </div>
+              {/* Vertical resizable handle */}
+              <ResizableHandle withHandle />
+              
+              {/* Events list section - resizable height */}
+              <ResizablePanel>
+                <section className="border-b md:border-b-0 md:border-r bg-muted/30 h-full overflow-hidden">
+                  <div className="h-full overflow-auto">
+                    <EventsPanel
+                      events={events}
+                      loading={loading}
+                      selectedEvent={selected}
+                      onEventSelect={setSelected}
+                    />
+                  </div>
+                </section>
+              </ResizablePanel>
+            </ResizablePanelGroup>
           </ResizablePanel>
           
-          {/* Resizable handle */}
+          {/* Horizontal resizable handle */}
           <ResizableHandle withHandle />
           
           {/* Map section */}

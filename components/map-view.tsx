@@ -274,10 +274,20 @@ function clusterIcon(count: number): DivIcon {
 function pinIcon(): DivIcon {
   const html = `
     <div class="relative cursor-pointer">
-      <div class="bg-emerald-600 ring-2 ring-white rounded-full shadow-lg hover:bg-emerald-500 transition-colors duration-200" style="width:20px;height:20px;"></div>
+      <svg width="24" height="32" viewBox="0 0 24 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 0C5.373 0 0 5.373 0 12c0 9 12 20 12 20s12-11 12-20c0-6.627-5.373-12-12-12z" fill="#dc2626"/>
+        <circle cx="12" cy="12" r="6" fill="white"/>
+        <circle cx="12" cy="12" r="4" fill="#dc2626"/>
+      </svg>
     </div>
   `
-  return L.divIcon({ html, className: "pin-icon", iconSize: [20, 20] as any })
+  return L.divIcon({ 
+    html, 
+    className: "pin-icon", 
+    iconSize: [24, 32] as any,
+    iconAnchor: [12, 32] as any,
+    popupAnchor: [0, -32] as any
+  })
 }
 
 // Export the wrapper component
