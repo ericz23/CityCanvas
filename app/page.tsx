@@ -227,7 +227,12 @@ export default function Page() {
         right={
           <div className="flex items-center gap-2">
             <LastUpdatedBadge lastUpdated={lastUpdated} />
-            <Button variant="outline" size="sm" onClick={onManualRefresh}>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={onManualRefresh}
+              className="text-black border-black/30 hover:bg-black/10 hover:border-black/50 bg-white"
+            >
               <RefreshCw className="h-4 w-4 mr-2" />
               {"Refresh"}
             </Button>
