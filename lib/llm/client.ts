@@ -16,6 +16,8 @@ export interface ExtractedEvent {
   imageUrl?: string | null
   categories: string[]
   sourceUrl: string
+  lat?: number | null
+  lng?: number | null
 }
 
 interface EventPost {

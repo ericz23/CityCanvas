@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { SearchClient } from "@/lib/search/client"
 import { HTMLFetcher } from "@/lib/fetcher/html"
 import { LLMClient } from "@/lib/llm/client"
+import { GeocodingClient } from "@/lib/geocoding/client"
+import { DeduplicationClient } from "@/lib/deduplication"
 import { PrismaClient } from "@prisma/client"
 
 const prisma = new PrismaClient()
@@ -52,12 +54,61 @@ export async function POST(req: Request) {
     
     console.log(`Total events extracted: ${allEvents.length}`)
     
+    // Geocode events
+    console.log('Starting geocoding...')
+    const geocodingClient = new GeocodingClient()
+    let geocodedCount = 0
+    
+    for (const event of allEvents) {
+      if (event.venueName) {
+        try {
+          const geocodeResult = await geocodingClient.geocodeVenue({
+            venueName: event.venueName,
+            address: event.address || undefined
+          })
+          
+          if (geocodeResult) {
+            event.lat = geocodeResult.lat
+            event.lng = geocodeResult.lng
+            geocodedCount++
+            console.log(`✅ Geocoded: ${event.venueName} -> ${geocodeResult.lat}, ${geocodeResult.lng}`)
+          } else {
+            console.log(`❌ Failed to geocode: ${event.venueName}`)
+          }
+        } catch (error) {
+          console.error(`Geocoding error for "${event.venueName}":`, error)
+        }
+      }
+    }
+    
+    console.log(`Geocoded ${geocodedCount} out of ${allEvents.length} events`)
+    
+    // Check for duplicates using deduplication service
+    console.log('Checking for duplicates...')
+    const deduplicationClient = new DeduplicationClient()
+    let duplicateCount = 0
+    let newEvents = []
+    
+    for (const event of allEvents) {
+      const duplicateResult = await deduplicationClient.checkDuplicate(event)
+      
+      if (duplicateResult.isDuplicate) {
+        duplicateCount++
+        console.log(`🚫 Duplicate found: "${event.title}" (${Math.round(duplicateResult.confidence * 100)}% match)`)
+      } else {
+        newEvents.push(event)
+        console.log(`✅ New event: "${event.title}"`)
+      }
+    }
+    
+    console.log(`Found ${duplicateCount} duplicates, ${newEvents.length} new events`)
+    
     // Save events to database (unless dry run)
     let upsertedCount = 0
-    if (!dryRun && allEvents.length > 0) {
-      console.log('Saving events to database...')
+    if (!dryRun && newEvents.length > 0) {
+      console.log('Saving new events to database...')
       
-      for (const event of allEvents) {
+      for (const event of newEvents) {
         try {
           // Create or update source
           const source = await prisma.source.upsert({
@@ -82,6 +133,8 @@ export async function POST(req: Request) {
               endsAt: event.endsAt ? new Date(event.endsAt) : null,
               venueName: event.venueName,
               address: event.address,
+              lat: event.lat,
+              lng: event.lng,
               priceMin: event.priceMin,
               priceMax: event.priceMax,
               currency: event.currency || 'USD',
@@ -99,6 +152,8 @@ export async function POST(req: Request) {
               endsAt: event.endsAt ? new Date(event.endsAt) : null,
               venueName: event.venueName,
               address: event.address,
+              lat: event.lat,
+              lng: event.lng,
               priceMin: event.priceMin,
               priceMax: event.priceMax,
               currency: event.currency || 'USD',
@@ -126,8 +181,11 @@ export async function POST(req: Request) {
       discovered: urls.length,
       fetched: fetchedContent.length,
       extracted: allEvents.length,
+      geocoded: geocodedCount,
+      duplicates: duplicateCount,
+      newEvents: newEvents.length,
       upserted: upsertedCount,
-      summary: `Discovered ${urls.length} URLs, fetched ${fetchedContent.length} pages, extracted ${allEvents.length} events, upserted ${upsertedCount} events`,
+      summary: `Discovered ${urls.length} URLs, fetched ${fetchedContent.length} pages, extracted ${allEvents.length} events, geocoded ${geocodedCount} events, found ${duplicateCount} duplicates, saved ${newEvents.length} new events, upserted ${upsertedCount} events`,
       sampleEvents: dryRun ? allEvents.slice(0, 3) : undefined
     })
   } catch (error) {

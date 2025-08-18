@@ -7,6 +7,7 @@ import { FiltersPanel, type FiltersState } from "@/components/filters-panel"
 import { Header } from "@/components/header"
 import { LastUpdatedBadge } from "@/components/last-updated-badge"
 import { EventDetailDrawer } from "@/components/event-detail-drawer"
+import { ClusterEventsDrawer } from "@/components/cluster-events-drawer"
 import { EmptyState } from "@/components/empty-state"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -50,6 +51,9 @@ export default function Page() {
   const [loading, setLoading] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<string | null>(null)
   const [selected, setSelected] = useState<ApiEvent | null>(null)
+  const [clusterEvents, setClusterEvents] = useState<ApiEvent[]>([])
+  const [showClusterDrawer, setShowClusterDrawer] = useState(false)
+  const [selectedFromCluster, setSelectedFromCluster] = useState(false)
   const [autoRefreshMs, setAutoRefreshMs] = useState<number>(0)
   const refreshTimerRef = useRef<number | null>(null)
 
@@ -201,6 +205,24 @@ export default function Page() {
     fetchEvents({ showToast: true })
   }, [fetchEvents])
 
+  const onClusterClick = useCallback((lat: number, lng: number, zoom: number, events: ApiEvent[]) => {
+    console.log("Cluster clicked with", events.length, "events")
+    setClusterEvents(events)
+    setShowClusterDrawer(true)
+  }, [])
+
+  const onClusterEventClick = useCallback((event: ApiEvent) => {
+    setSelected(event)
+    setShowClusterDrawer(false)
+    setSelectedFromCluster(true)
+  }, [])
+
+  const onBackToCluster = useCallback(() => {
+    setSelected(null)
+    setSelectedFromCluster(false)
+    setShowClusterDrawer(true)
+  }, [])
+
   return (
     <div className="flex min-h-screen flex-col">
       <Header
@@ -316,7 +338,11 @@ export default function Page() {
         <section className="relative">
           <MapView
             events={events}
-            onMarkerClick={setSelected}
+            onMarkerClick={(event) => {
+              setSelected(event)
+              setSelectedFromCluster(false)
+            }}
+            onClusterClick={onClusterClick}
             onBoundsChange={onBoundsChange}
             initialBounds={SF_DEFAULT_BOUNDS}
             loading={loading}
@@ -324,7 +350,19 @@ export default function Page() {
         </section>
       </main>
 
-      <EventDetailDrawer event={selected} open={!!selected} onOpenChange={(o) => !o && setSelected(null)} />
+      <EventDetailDrawer 
+        event={selected} 
+        open={!!selected} 
+        onOpenChange={(o) => !o && setSelected(null)}
+        onBackToCluster={onBackToCluster}
+        showBackButton={selectedFromCluster}
+      />
+      <ClusterEventsDrawer 
+        events={clusterEvents} 
+        open={showClusterDrawer} 
+        onOpenChange={setShowClusterDrawer}
+        onEventClick={onClusterEventClick}
+      />
     </div>
   )
 }

@@ -1,7 +1,7 @@
 "use client"
 
 import "leaflet/dist/leaflet.css"
-import { MapContainer, TileLayer, useMapEvents } from "react-leaflet"
+import { MapContainer, TileLayer, useMapEvents, Marker } from "react-leaflet"
 import type { LatLngBounds } from "leaflet"
 import L, { type DivIcon } from "leaflet"
 import { useEffect, useMemo, useRef, useState } from "react"
@@ -19,6 +19,7 @@ type Bounds = {
 type Props = {
   events: ApiEvent[]
   onMarkerClick: (ev: ApiEvent) => void
+  onClusterClick: (lat: number, lng: number, zoom: number, events: ApiEvent[]) => void
   onBoundsChange: (b: Bounds) => void
   initialBounds: Bounds
   loading?: boolean
@@ -57,7 +58,7 @@ function MapViewWrapper(props: Props) {
   return <MapViewComponent {...props} />
 }
 
-function MapViewComponent({ events, onMarkerClick, onBoundsChange, initialBounds, loading }: Props) {
+function MapViewComponent({ events, onMarkerClick, onClusterClick, onBoundsChange, initialBounds, loading }: Props) {
   const center = useMemo(() => {
     const lat = (initialBounds.minLat + initialBounds.maxLat) / 2
     const lng = (initialBounds.minLng + initialBounds.maxLng) / 2
@@ -81,18 +82,51 @@ function MapViewComponent({ events, onMarkerClick, onBoundsChange, initialBounds
     const b = mapBounds ?? boundsRef.current
     const currentZoom = z ?? zoom
     if (!b) return
+    
+    // Get all points with coordinates for indexing
+    const pointsWithCoords = events.filter((e) => e.venue?.lat != null && e.venue?.lng != null)
+    
     const arr = index.getClusters([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()], Math.round(currentZoom))
+    
     // Map supercluster features to our Feature type
     const fc: Feature[] = arr.map((f: any) => {
       if (f.properties.cluster) {
-        // Collect representative ids if present
+        // Get the exact events that belong to this cluster using Supercluster's data
+        const clusterEvents: ApiEvent[] = []
+        const leafletIds = f.properties.leaflet_ids ?? []
+        
+        // Use the cluster's actual point indices to get the correct events
+        if (f.properties.cluster_id !== undefined) {
+          // Get the leaves (individual points) that make up this cluster
+          const leaves = index.getLeaves(f.properties.cluster_id, Infinity)
+          const processedCoords = new Set<string>()
+          
+          leaves.forEach((leaf: any) => {
+            // Find the corresponding event by matching coordinates
+            const leafCoords = leaf.geometry.coordinates
+            const coordKey = `${leafCoords[0]},${leafCoords[1]}`
+            
+            // Find all events at this coordinate (not just the first one)
+            const matchingEvents = pointsWithCoords.filter(event => 
+              event.venue?.lat === leafCoords[1] && event.venue?.lng === leafCoords[0]
+            )
+            
+            // Only process each unique coordinate once to avoid duplicates
+            if (!processedCoords.has(coordKey)) {
+              processedCoords.add(coordKey)
+              clusterEvents.push(...matchingEvents)
+            }
+          })
+        }
+        
         return {
           type: "Feature",
           geometry: f.geometry,
           properties: {
             cluster: true,
             point_count: f.properties.point_count,
-            ids: f.properties.leaflet_ids ?? [],
+            ids: leafletIds,
+            events: clusterEvents,
           },
         } as Feature
       } else {
@@ -140,9 +174,16 @@ function MapViewComponent({ events, onMarkerClick, onBoundsChange, initialBounds
         center={[center.lat, center.lng]}
         zoom={zoom}
         className="h-full w-full"
-        worldCopyJump={true}
+        worldCopyJump={false}
         scrollWheelZoom={true}
         attributionControl={true}
+        maxBounds={[
+          [36.6, -122.8], // Southwest bounds (Monterey area, inland from ocean)
+          [38.6, -121.8]  // Northeast bounds (Sacramento area, eastern bound near Livermore)
+        ]}
+        maxBoundsViscosity={1.0}
+        minZoom={8}
+        maxZoom={18}
       >
         <TileLayer
           // OpenStreetMap tiles (no API key)
@@ -152,11 +193,7 @@ function MapViewComponent({ events, onMarkerClick, onBoundsChange, initialBounds
         <MapEvents />
         <Markers
           clusters={clusters}
-          onClusterClick={(lat, lng, z) => {
-            // Zoom in on cluster
-            // Leaflet instance is not directly available; use a custom event to request zoom via fitBounds.
-            // As a simple approach, just update state and rely on moveend to recompute clusters.
-          }}
+          onClusterClick={onClusterClick}
           onPointClick={(ev) => onMarkerClick(ev)}
         />
       </MapContainer>
@@ -175,86 +212,50 @@ function Markers({
   onPointClick,
 }: {
   clusters: Feature[]
-  onClusterClick: (lat: number, lng: number, zoom: number) => void
+  onClusterClick: (lat: number, lng: number, zoom: number, events: ApiEvent[]) => void
   onPointClick: (ev: ApiEvent) => void
 }) {
-  // Create manual markers via Leaflet Layer API to avoid default icon issues.
-  const groupRef = useRef<L.LayerGroup | null>(null)
-  const map = (L as any).Map.instance || undefined // not available; we'll use useEffect with useMapEvents earlier.
-
-  const [layerGroup, setLayerGroup] = useState<L.LayerGroup | null>(null)
-
-  useEffect(() => {
-    // Attach a layer group to the map via leaflet's global hook
-    if (!layerGroup) {
-      const g = L.layerGroup()
-      setLayerGroup(g)
-    }
-  }, [layerGroup])
-
-  // Render clusters as DivIcons
-  useEffect(() => {
-    if (!layerGroup) return
-
-    // Clear previous markers
-    layerGroup.clearLayers()
-
-    clusters.forEach((f) => {
-      const [lng, lat] = f.geometry.coordinates as [number, number]
-      if ((f.properties as any).cluster) {
-        const count = (f.properties as any).point_count as number
-        const icon = clusterIcon(count)
-        const marker = L.marker([lat, lng], { icon })
-        marker.on("click", () => {
-          // Simple zoom in on click by opening a circle to indicate cluster; in a full app, you'd call map.zoomIn().
-          // Here we do nothing special; clusters recompute on map zoom/pan.
-        })
-        marker.addTo(layerGroup)
-      } else {
-        const ev = (f.properties as any).event as ApiEvent
-        const marker = L.marker([lat, lng], { icon: pinIcon() })
-        marker.on("click", () => {
-          console.log("Map marker clicked:", ev.title)
-          onPointClick(ev)
-        })
-        marker.addTo(layerGroup)
-      }
-    })
-
-    return () => {
-      layerGroup.clearLayers()
-    }
-  }, [clusters, layerGroup, onPointClick])
-
-  // Attach layerGroup to map container element
-  useEffect(() => {
-    // Find the map instance by querying leaflet container
-    const containers = document.getElementsByClassName("leaflet-pane leaflet-marker-pane")
-    if (!containers.length || !layerGroup) return
-    // LayerGroup is managed by Leaflet; we need map to add it. Easiest: locate any map by global query
-    const maps = (L as any)._leaflet_id ? [] : []
-    // Fallback: try to add via global map variable from leaflet; if not available, attach through known method:
-    // We can search for the Leaflet map object via the first element with class 'leaflet-container'
-    const container = document.querySelector(".leaflet-container") as any
-    const mapInst = container?._leaflet_id != null ? (container?._leaflet as L.Map) : null
-    // If react-leaflet attached map to container, it stores instance differently; since that is brittle, we use a safer approach:
-    // Create a dummy marker and read its _map when available.
-    let mapObj: L.Map | null = null
-    try {
-      // @ts-ignore
-      const anyMarker = new L.Marker([0, 0]).addTo(layerGroup)
-      // @ts-ignore
-      mapObj = (anyMarker as any)._map ?? null
-      layerGroup.removeLayer(anyMarker)
-    } catch {
-      mapObj = null
-    }
-    if (mapObj && !mapObj.hasLayer(layerGroup)) {
-      layerGroup.addTo(mapObj)
-    }
-  }, [layerGroup])
-
-  return null
+  
+  return (
+    <>
+      {clusters.map((f, index) => {
+        const [lng, lat] = f.geometry.coordinates as [number, number]
+        
+        if ((f.properties as any).cluster) {
+          const count = (f.properties as any).point_count as number
+          const clusterEvents = (f.properties as any).events as ApiEvent[] || []
+          return (
+            <Marker
+              key={`cluster-${index}`}
+              position={[lat, lng]}
+              icon={clusterIcon(count)}
+              eventHandlers={{
+                click: () => {
+                  console.log("Cluster clicked with", count, "points")
+                  onClusterClick(lat, lng, 15, clusterEvents)
+                }
+              }}
+            />
+          )
+        } else {
+          const ev = (f.properties as any).event as ApiEvent
+          return (
+            <Marker
+              key={`event-${ev.id}`}
+              position={[lat, lng]}
+              icon={pinIcon()}
+              eventHandlers={{
+                click: () => {
+                  console.log("Event marker clicked:", ev.title)
+                  onPointClick(ev)
+                }
+              }}
+            />
+          )
+        }
+      })}
+    </>
+  )
 }
 
 function clusterIcon(count: number): DivIcon {
