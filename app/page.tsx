@@ -12,6 +12,7 @@ import { ClusterEventsDrawer } from "@/components/cluster-events-drawer"
 import { Button } from "@/components/ui/button"
 import { RefreshCw } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable"
 import type { ApiEvent } from "@/lib/types"
 
 // Dynamically import MapView to prevent SSR issues with Leaflet
@@ -239,48 +240,57 @@ export default function Page() {
           </div>
         }
       />
-      <main className="flex-1 grid md:grid-cols-[360px_1fr] min-h-0">
-        {/* Left sidebar with filters and events */}
-        <div className="flex flex-col h-full min-h-0">
-          {/* Filters section - fixed height, independent scroll */}
-          <section className="border-b md:border-b-0 md:border-r bg-muted/30 flex-shrink-0">
-            <div className="h-64 md:h-80 overflow-auto">
-              <FiltersPanel
-                value={filters}
-                onChange={setFilters}
-                autoRefreshMs={autoRefreshMs}
-                onChangeAutoRefresh={setAutoRefreshMs}
-              />
+      <main className="flex-1 min-h-0">
+        <ResizablePanelGroup direction="horizontal" className="h-full">
+          {/* Left sidebar with filters and events - resizable width */}
+          <ResizablePanel defaultSize={25} minSize={20} maxSize={50}>
+            <div className="flex flex-col h-full min-h-0">
+              {/* Filters section - fixed height, independent scroll */}
+              <section className="border-b md:border-b-0 md:border-r bg-muted/30 flex-shrink-0">
+                <div className="h-64 md:h-80 overflow-auto">
+                  <FiltersPanel
+                    value={filters}
+                    onChange={setFilters}
+                    autoRefreshMs={autoRefreshMs}
+                    onChangeAutoRefresh={setAutoRefreshMs}
+                  />
+                </div>
+              </section>
+              
+              {/* Events list section - takes remaining height, independent scroll */}
+              <section className="border-b md:border-b-0 md:border-r bg-muted/30 flex-1 overflow-hidden">
+                <div className="h-full overflow-auto">
+                  <EventsPanel
+                    events={events}
+                    loading={loading}
+                    selectedEvent={selected}
+                    onEventSelect={setSelected}
+                  />
+                </div>
+              </section>
             </div>
-          </section>
+          </ResizablePanel>
           
-          {/* Events list section - takes remaining height, independent scroll */}
-          <section className="border-b md:border-b-0 md:border-r bg-muted/30 flex-1 overflow-hidden">
-            <div className="h-full overflow-auto">
-              <EventsPanel
+          {/* Resizable handle */}
+          <ResizableHandle withHandle />
+          
+          {/* Map section */}
+          <ResizablePanel>
+            <section className="relative h-full">
+              <MapView
                 events={events}
+                onMarkerClick={(event) => {
+                  setSelected(event)
+                  setSelectedFromCluster(false)
+                }}
+                onClusterClick={onClusterClick}
+                onBoundsChange={onBoundsChange}
+                initialBounds={SF_DEFAULT_BOUNDS}
                 loading={loading}
-                selectedEvent={selected}
-                onEventSelect={setSelected}
               />
-            </div>
-          </section>
-        </div>
-        
-        {/* Map section */}
-        <section className="relative">
-          <MapView
-            events={events}
-            onMarkerClick={(event) => {
-              setSelected(event)
-              setSelectedFromCluster(false)
-            }}
-            onClusterClick={onClusterClick}
-            onBoundsChange={onBoundsChange}
-            initialBounds={SF_DEFAULT_BOUNDS}
-            loading={loading}
-          />
-        </section>
+            </section>
+          </ResizablePanel>
+        </ResizablePanelGroup>
       </main>
 
       <EventDetailDrawer 
