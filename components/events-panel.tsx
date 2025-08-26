@@ -68,17 +68,16 @@ export function EventsPanel({ events, loading, selectedEvent, onEventSelect }: E
                       }}
                       aria-label={`Open details for ${ev.title}`}
                     >
-                      <div className="flex gap-3">
-                        <img
-                          src={
-                            ev.imageUrl ??
-                            "/placeholder.svg?height=64&width=96&query=san%20francisco%20event%20thumbnail"
-                          }
-                          alt={ev.title}
-                          className="h-16 w-24 object-cover rounded-md border"
-                          loading="lazy"
-                        />
-                        <div className="flex-1">
+                      <div className={ev.imageUrl ? "flex gap-3" : ""}>
+                        {ev.imageUrl && (
+                          <img
+                            src={ev.imageUrl}
+                            alt={ev.title}
+                            className="h-16 w-24 object-cover rounded-md border flex-shrink-0"
+                            loading="lazy"
+                          />
+                        )}
+                        <div className={ev.imageUrl ? "flex-1" : ""}>
                           <div className="font-medium">{ev.title}</div>
                           <div className="text-xs text-muted-foreground">
                             {new Date(ev.startsAt).toLocaleString()}

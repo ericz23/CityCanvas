@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
+import { X } from "lucide-react"
 
 type Category = { slug: string; name: string }
 type Tag = { slug: string; name: string }
@@ -48,16 +49,68 @@ export function FiltersPanel(props: {
 
   const selectedCount = useMemo(() => v.categories.length, [v.categories])
 
+  // Check if any filters are active (not at default values)
+  const hasActiveFilters = useMemo(() => {
+    return (
+      v.datePreset !== "3d" ||
+      v.start !== "" ||
+      v.end !== "" ||
+      v.categories.length > 0 ||
+      v.price !== "any" ||
+      v.timeOfDay !== "any" ||
+      v.q !== ""
+    )
+  }, [v])
+
+  const clearAllFilters = () => {
+    props.onChange({
+      datePreset: "3d",
+      start: "",
+      end: "",
+      categories: [],
+      price: "any",
+      timeOfDay: "any",
+      q: "",
+    })
+  }
+
   return (
     <div className="p-4 space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">{"Filters"}</h2>
-        {selectedCount > 0 ? (
-          <Badge variant="secondary">
-            {selectedCount} {"selected"}
-          </Badge>
-        ) : null}
+        <div className="flex items-center gap-2">
+          {selectedCount > 0 ? (
+            <Badge variant="secondary">
+              {selectedCount} {"selected"}
+            </Badge>
+          ) : null}
+          {hasActiveFilters && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={clearAllFilters}
+              className="h-8 px-2 text-xs"
+            >
+              <X className="h-3 w-3 mr-1" />
+              Clear all
+            </Button>
+          )}
+        </div>
       </div>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">{"Search"}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Input
+            placeholder="Search title, venue, description"
+            value={v.q}
+            onChange={(e) => props.onChange({ ...v, q: e.target.value })}
+            aria-label="Search text"
+          />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="pb-2">
@@ -155,26 +208,12 @@ export function FiltersPanel(props: {
           </div>
           <Separator />
           <div className="grid grid-cols-2 gap-2">
-            {(["any", "morning", "afternoon", "evening", "late"] as FiltersState["timeOfDay"][]).map((t) => (
+            {(["any", "morning", "afternoon", "evening"] as FiltersState["timeOfDay"][]).map((t) => (
               <ToggleChip key={t} selected={v.timeOfDay === t} onClick={() => props.onChange({ ...v, timeOfDay: t })}>
                 {timeOfDayLabel(t)}
               </ToggleChip>
             ))}
           </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">{"Search"}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <Input
-            placeholder="Search title, venue, description"
-            value={v.q}
-            onChange={(e) => props.onChange({ ...v, q: e.target.value })}
-            aria-label="Search text"
-          />
         </CardContent>
       </Card>
 
