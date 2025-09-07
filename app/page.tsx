@@ -10,7 +10,7 @@ import { LastUpdatedBadge } from "@/components/last-updated-badge"
 import { EventDetailDrawer } from "@/components/event-detail-drawer"
 import { ClusterEventsDrawer } from "@/components/cluster-events-drawer"
 import { Button } from "@/components/ui/button"
-import { RefreshCw } from "lucide-react"
+import { RefreshCw, LocateFixed } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable"
 import type { ApiEvent } from "@/lib/types"
@@ -55,6 +55,9 @@ export default function Page() {
   const [selectedFromCluster, setSelectedFromCluster] = useState(false)
   const [autoRefreshMs, setAutoRefreshMs] = useState<number>(0)
   const refreshTimerRef = useRef<number | null>(null)
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
+  const [isLocating, setIsLocating] = useState(false)
+  const geoWatchIdRef = useRef<number | null>(null)
 
   const initialFilters = useMemo<FiltersState>(() => {
     // Initialize filters from URL
@@ -222,12 +225,67 @@ export default function Page() {
     setShowClusterDrawer(true)
   }, [])
 
+  const startWatchingLocation = useCallback(() => {
+    if (typeof window === 'undefined') return
+    if (!navigator.geolocation) {
+      toast({ title: "Location not supported", description: "Your browser doesn't support geolocation.", variant: "destructive" })
+      return
+    }
+    setIsLocating(true)
+    const id = navigator.geolocation.watchPosition(
+      (pos) => {
+        setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+      },
+      (err) => {
+        console.error("Geolocation error", err)
+        setIsLocating(false)
+        toast({ title: "Location unavailable", description: err.message ?? "Unable to retrieve your location.", variant: "destructive" })
+        if (geoWatchIdRef.current != null) navigator.geolocation.clearWatch(geoWatchIdRef.current)
+        geoWatchIdRef.current = null
+      },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+    )
+    // @ts-ignore - TS DOM lib allows number here
+    geoWatchIdRef.current = id as unknown as number
+  }, [toast])
+
+  const stopWatchingLocation = useCallback(() => {
+    if (typeof window === 'undefined') return
+    if (geoWatchIdRef.current != null) {
+      navigator.geolocation.clearWatch(geoWatchIdRef.current)
+      geoWatchIdRef.current = null
+    }
+    setIsLocating(false)
+    setUserLocation(null)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      // Cleanup on unmount
+      if (geoWatchIdRef.current != null) {
+        navigator.geolocation.clearWatch(geoWatchIdRef.current)
+        geoWatchIdRef.current = null
+      }
+    }
+  }, [])
+
   return (
     <div className="flex h-screen flex-col">
       <Header
         right={
           <div className="flex items-center gap-2">
             <LastUpdatedBadge lastUpdated={lastUpdated} />
+            <Button
+              variant={isLocating ? "default" : "outline"}
+              size="sm"
+              onClick={() => {
+                if (isLocating) stopWatchingLocation(); else startWatchingLocation()
+              }}
+              className={isLocating ? "bg-emerald-600 text-white" : "text-black border-black/30 hover:border-black/50 bg-white"}
+            >
+              <LocateFixed className="h-4 w-4 mr-2" />
+              {isLocating ? "Location On" : "My Location"}
+            </Button>
             <Button 
               variant="outline" 
               size="sm" 
@@ -294,6 +352,7 @@ export default function Page() {
                 onBoundsChange={onBoundsChange}
                 initialBounds={SF_DEFAULT_BOUNDS}
                 loading={loading}
+                userLocation={userLocation ?? undefined}
               />
             </section>
           </ResizablePanel>
