@@ -1,7 +1,7 @@
 "use client"
 
 import "leaflet/dist/leaflet.css"
-import { MapContainer, TileLayer, useMapEvents, Marker } from "react-leaflet"
+import { MapContainer, TileLayer, useMapEvents, Marker, useMap } from "react-leaflet"
 import type { LatLngBounds } from "leaflet"
 import L, { type DivIcon } from "leaflet"
 import { useEffect, useMemo, useRef, useState } from "react"
@@ -23,6 +23,7 @@ type Props = {
   onBoundsChange: (b: Bounds) => void
   initialBounds: Bounds
   loading?: boolean
+  userLocation?: { lat: number; lng: number }
 }
 
 type FeatureProps = { cluster: true; point_count: number; ids: string[] } | { cluster: false; event: ApiEvent }
@@ -58,7 +59,7 @@ function MapViewWrapper(props: Props) {
   return <MapViewComponent {...props} />
 }
 
-function MapViewComponent({ events, onMarkerClick, onClusterClick, onBoundsChange, initialBounds, loading }: Props) {
+function MapViewComponent({ events, onMarkerClick, onClusterClick, onBoundsChange, initialBounds, loading, userLocation }: Props) {
   const center = useMemo(() => {
     const lat = (initialBounds.minLat + initialBounds.maxLat) / 2
     const lng = (initialBounds.minLng + initialBounds.maxLng) / 2
@@ -67,6 +68,19 @@ function MapViewComponent({ events, onMarkerClick, onClusterClick, onBoundsChang
 
   const [zoom, setZoom] = useState(12)
   const [clusters, setClusters] = useState<Feature[]>([])
+  const [useSFBBox, setUseSFBBox] = useState(true)
+  const mapRef = useRef<L.Map | null>(null)
+
+  const isOutsideSF = useMemo(() => {
+    if (!userLocation) return false
+    const { lat, lng } = userLocation
+    return (
+      lat < initialBounds.minLat ||
+      lat > initialBounds.maxLat ||
+      lng < initialBounds.minLng ||
+      lng > initialBounds.maxLng
+    )
+  }, [userLocation, initialBounds])
 
   // Build clustering index
   const index = useMemo(() => {
@@ -168,6 +182,14 @@ function MapViewComponent({ events, onMarkerClick, onClusterClick, onBoundsChang
     return null
   }
 
+  function MapController({ onReady }: { onReady: (map: L.Map) => void }) {
+    const map = useMap()
+    useEffect(() => {
+      onReady(map)
+    }, [map, onReady])
+    return null
+  }
+
   return (
     <div className="absolute inset-0">
       <MapContainer
@@ -177,10 +199,12 @@ function MapViewComponent({ events, onMarkerClick, onClusterClick, onBoundsChang
         worldCopyJump={false}
         scrollWheelZoom={true}
         attributionControl={true}
-        maxBounds={[
-          [36.6, -122.8], // Southwest bounds (Monterey area, inland from ocean)
-          [38.6, -121.8]  // Northeast bounds (Sacramento area, eastern bound near Livermore)
-        ]}
+        maxBounds={useSFBBox ? (
+          [
+            [36.6, -122.8], // Southwest bounds (Monterey area, inland from ocean)
+            [38.6, -121.8]  // Northeast bounds (Sacramento area, eastern bound near Livermore)
+          ]
+        ) : undefined}
         maxBoundsViscosity={1.0}
         minZoom={8}
         maxZoom={18}
@@ -190,13 +214,57 @@ function MapViewComponent({ events, onMarkerClick, onClusterClick, onBoundsChang
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution={'Map data © <a href="https://openstreetmap.org">OpenStreetMap</a> contributors'}
         />
+        <MapController onReady={(m) => { mapRef.current = m }} />
         <MapEvents />
+        {userLocation && (
+          <Marker
+            position={[userLocation.lat, userLocation.lng]}
+            icon={userDotIcon()}
+            interactive={false}
+          />
+        )}
         <Markers
           clusters={clusters}
           onClusterClick={onClusterClick}
           onPointClick={(ev) => onMarkerClick(ev)}
         />
       </MapContainer>
+      {userLocation && isOutsideSF && useSFBBox && (
+        <div className="absolute right-2 top-2 z-[500] flex items-center gap-2 rounded-md bg-background/90 backdrop-blur border px-2 py-1 text-xs shadow-sm">
+          <span className="text-muted-foreground">You're outside SF</span>
+          <button
+            className="px-2 py-0.5 rounded border bg-white hover:bg-muted/70 transition"
+            onClick={() => {
+              setUseSFBBox(false)
+              if (mapRef.current) {
+                const { lat, lng } = userLocation
+                // Slight delay to ensure bounds are relaxed before recenter
+                setTimeout(() => mapRef.current?.setView([lat, lng], 14), 0)
+              }
+            }}
+          >
+            View my location
+          </button>
+        </div>
+      )}
+      {!useSFBBox && (
+        <div className="absolute right-2 top-2 z-[500] flex items-center gap-2 rounded-md bg-background/90 backdrop-blur border px-2 py-1 text-xs shadow-sm">
+          <button
+            className="px-2 py-0.5 rounded border bg-white hover:bg-muted/70 transition"
+            onClick={() => {
+              setUseSFBBox(true)
+              if (mapRef.current) {
+                const sw: [number, number] = [initialBounds.minLat, initialBounds.minLng]
+                const ne: [number, number] = [initialBounds.maxLat, initialBounds.maxLng]
+                // Fit the SF bounds again
+                setTimeout(() => mapRef.current?.fitBounds([sw, ne] as any, { animate: true }), 0)
+              }
+            }}
+          >
+            Back to SF
+          </button>
+        </div>
+      )}
       {loading && (
         <div className="absolute left-2 top-2 z-[500] rounded-md bg-background/80 backdrop-blur border px-2 py-1 text-xs">
           {"Loading events..."}
@@ -288,6 +356,16 @@ function pinIcon(): DivIcon {
     iconAnchor: [12, 32] as any,
     popupAnchor: [0, -32] as any
   })
+}
+
+function userDotIcon(): DivIcon {
+  const size = 14
+  const html = `
+    <div class="relative">
+      <div class="bg-blue-500 rounded-full ring-2 ring-white shadow-md" style="width:${size}px;height:${size}px;"></div>
+    </div>
+  `
+  return L.divIcon({ html, className: "user-dot-icon", iconSize: [size, size] as any })
 }
 
 // Export the wrapper component
