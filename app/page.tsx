@@ -200,7 +200,7 @@ export default function Page() {
 
   const onManualRefresh = useCallback(async () => {
     // Optionally call ingest endpoint for demo; then refetch
-    await fetch("/api/ingest/run", { method: "POST", body: JSON.stringify({ city: "san-francisco", dryRun: true }) })
+    await fetch("/api/ingest/run", { method: "POST", body: JSON.stringify({ city: "san-francisco", dryRun: false }) })
     fetchEvents({ showToast: true })
   }, [fetchEvents])
 
