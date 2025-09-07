@@ -439,6 +439,8 @@ export default function Page() {
         open={showClusterDrawer} 
         onOpenChange={setShowClusterDrawer}
         onEventClick={onClusterEventClick}
+        portalContainer={mapPanelRef.current}
+        withinContainer
       />
     </div>
   )

@@ -12,11 +12,15 @@ export function ClusterEventsDrawer({
   open,
   onOpenChange,
   onEventClick,
+  portalContainer,
+  withinContainer,
 }: {
   events: ApiEvent[]
   open: boolean
   onOpenChange: (o: boolean) => void
   onEventClick: (event: ApiEvent) => void
+  portalContainer?: HTMLElement | null
+  withinContainer?: boolean
 }) {
   if (!events || events.length === 0) return null
 
@@ -53,7 +57,7 @@ export function ClusterEventsDrawer({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-2xl lg:max-w-3xl overflow-y-auto animate-in slide-in-from-right duration-300 z-[1000]">
+      <SheetContent side="right" portalContainer={portalContainer} withinContainer={withinContainer} className="w-full sm:w-1/2 min-w-[20rem] max-w-none sm:max-w-none overflow-y-auto animate-in slide-in-from-right duration-300 z-[1000]">
         <div className="space-y-6 p-6">
           <SheetHeader className="text-left">
             <SheetTitle className="text-2xl font-bold">
