@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import dynamic from "next/dynamic"
 import { FiltersPanel, type FiltersState } from "@/components/filters-panel"
+import { FiltersBar } from "@/components/filters-bar"
 import { EventsPanel } from "@/components/events-panel"
 import { Header } from "@/components/header"
 import { LastUpdatedBadge } from "@/components/last-updated-badge"
@@ -356,47 +357,30 @@ export default function Page() {
           </div>
         }
       />
+      <FiltersBar
+        value={filters}
+        onChange={setFilters}
+        autoRefreshMs={autoRefreshMs}
+        onChangeAutoRefresh={setAutoRefreshMs}
+      />
       <main className="flex-1 min-h-0">
         <ResizablePanelGroup direction="horizontal" className="h-full">
-          {/* Left sidebar with filters and events - resizable width */}
-          <ResizablePanel defaultSize={25} minSize={20} maxSize={50}>
-            <ResizablePanelGroup direction="vertical" className="h-full">
-              {/* Filters section - resizable height */}
-              <ResizablePanel defaultSize={40} minSize={25} maxSize={70}>
-                <section className="border-b md:border-b-0 md:border-r bg-muted/30 h-full overflow-hidden">
-                  <div className="h-full overflow-auto">
-                    <FiltersPanel
-                      value={filters}
-                      onChange={setFilters}
-                      autoRefreshMs={autoRefreshMs}
-                      onChangeAutoRefresh={setAutoRefreshMs}
-                    />
-                  </div>
-                </section>
-              </ResizablePanel>
-              
-              {/* Vertical resizable handle */}
-              <ResizableHandle withHandle />
-              
-              {/* Events list section - resizable height */}
-              <ResizablePanel>
-                <section className="border-b md:border-b-0 md:border-r bg-muted/30 h-full overflow-hidden">
-                  <div className="h-full overflow-auto">
-                    <EventsPanel
-                      events={events}
-                      loading={loading}
-                      selectedEvent={selected}
-                      onEventSelect={onSelectEvent}
-                    />
-                  </div>
-                </section>
-              </ResizablePanel>
-            </ResizablePanelGroup>
+          {/* Events list - left */}
+          <ResizablePanel defaultSize={30} minSize={20} maxSize={50}>
+            <section className="border-b md:border-b-0 md:border-r bg-muted/30 h-full overflow-hidden">
+              <div className="h-full overflow-auto">
+                <EventsPanel
+                  events={events}
+                  loading={loading}
+                  selectedEvent={selected}
+                  onEventSelect={onSelectEvent}
+                />
+              </div>
+            </section>
           </ResizablePanel>
-          
-          {/* Horizontal resizable handle */}
+
           <ResizableHandle withHandle />
-          
+
           {/* Map section */}
           <ResizablePanel>
             <section ref={mapPanelRef} className="relative h-full">

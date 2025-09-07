@@ -227,7 +227,7 @@ export function FiltersPanel(props: {
               <SelectValue placeholder="Off" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="0">{"Off"}</SelectItem>
+              <SelectItem value="0">{"Auto Refresh Off"}</SelectItem>
               <SelectItem value={`${5 * 60 * 1000}`}>{"Every 5 minutes"}</SelectItem>
               <SelectItem value={`${15 * 60 * 1000}`}>{"Every 15 minutes"}</SelectItem>
               <SelectItem value={`${60 * 60 * 1000}`}>{"Every hour"}</SelectItem>
@@ -260,7 +260,7 @@ function ToggleChip(props: { selected?: boolean; onClick?: () => void; children:
 function priceLabel(p: FiltersState["price"]) {
   switch (p) {
     case "any":
-      return "Any"
+      return "Any Price"
     case "free":
       return "Free"
     case "lt20":
