@@ -4,8 +4,8 @@ import Link from "next/link"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ExternalLink, Ticket, MapPin, Calendar, Clock, DollarSign, ArrowLeft } from "lucide-react"
-import type { ApiEvent } from "@/lib/types"
+import { ExternalLink, Ticket, MapPin, Calendar, Clock, DollarSign, ArrowLeft, Bike, Car, Footprints } from "lucide-react"
+import type { ApiEvent, DirectionsRoute, TravelMode } from "@/lib/types"
 
 export function EventDetailDrawer({
   event,
@@ -13,12 +13,30 @@ export function EventDetailDrawer({
   onOpenChange,
   onBackToCluster,
   showBackButton = false,
+  hasUserLocation = false,
+  route,
+  routeMode = "walking",
+  onEnableLocation,
+  onSetRouteMode,
+  onGetDirections,
+  onClearRoute,
+  portalContainer,
+  withinContainer,
 }: {
   event: ApiEvent | null
   open: boolean
   onOpenChange: (o: boolean) => void
   onBackToCluster?: () => void
   showBackButton?: boolean
+  hasUserLocation?: boolean
+  route?: DirectionsRoute | null
+  routeMode?: TravelMode
+  onEnableLocation?: () => void
+  onSetRouteMode?: (m: TravelMode) => void
+  onGetDirections?: () => void
+  onClearRoute?: () => void
+  portalContainer?: HTMLElement | null
+  withinContainer?: boolean
 }) {
   if (!event) return null
 
@@ -52,9 +70,24 @@ export function EventDetailDrawer({
     return "See pricing"
   }
 
+  const fmtDistance = (m: number) => {
+    if (!Number.isFinite(m)) return "–"
+    // show km for > 1km, else meters
+    if (m >= 1000) return `${(m / 1000).toFixed(1)} km`
+    return `${Math.round(m)} m`
+  }
+  const fmtDuration = (s: number) => {
+    if (!Number.isFinite(s)) return "–"
+    const mins = Math.round(s / 60)
+    if (mins < 60) return `${mins} min`
+    const h = Math.floor(mins / 60)
+    const rem = mins % 60
+    return `${h} hr${h > 1 ? "s" : ""}${rem ? ` ${rem} min` : ""}`
+  }
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-2xl lg:max-w-3xl overflow-y-auto animate-in slide-in-from-right duration-300 z-[1000]">
+      <SheetContent side="right" portalContainer={portalContainer} withinContainer={withinContainer} className="w-full sm:w-1/2 min-w-[20rem] max-w-none sm:max-w-none overflow-y-auto animate-in slide-in-from-right duration-300 z-[1000]">
         <div className="space-y-6 p-6">
           {showBackButton && onBackToCluster && (
             <Button
@@ -163,6 +196,62 @@ export function EventDetailDrawer({
               <p className="text-sm leading-relaxed text-foreground">{event.description}</p>
             </div>
           )}
+
+          {/* Directions */}
+          <div className="space-y-3 pt-4 border-t">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-medium text-muted-foreground">Directions</div>
+              <div className="flex items-center gap-1">
+                <button
+                  className={`px-2 py-1 rounded text-xs border ${routeMode === 'walking' ? 'bg-black text-white' : 'bg-white hover:bg-muted/70'}`}
+                  onClick={() => onSetRouteMode?.('walking')}
+                >
+                  <Footprints className="h-3 w-3 inline mr-1" /> Walk
+                </button>
+                <button
+                  className={`px-2 py-1 rounded text-xs border ${routeMode === 'cycling' ? 'bg-black text-white' : 'bg-white hover:bg-muted/70'}`}
+                  onClick={() => onSetRouteMode?.('cycling')}
+                >
+                  <Bike className="h-3 w-3 inline mr-1" /> Bike
+                </button>
+                <button
+                  className={`px-2 py-1 rounded text-xs border ${routeMode === 'driving' ? 'bg-black text-white' : 'bg-white hover:bg-muted/70'}`}
+                  onClick={() => onSetRouteMode?.('driving')}
+                >
+                  <Car className="h-3 w-3 inline mr-1" /> Drive
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {!hasUserLocation ? (
+                <>
+                  <div className="text-xs text-muted-foreground">Enable location to get directions.</div>
+                  <Button size="sm" variant="outline" onClick={() => onEnableLocation?.()}>Use My Location</Button>
+                </>
+              ) : (
+                <>
+                  <Button size="sm" onClick={() => onGetDirections?.()}>
+                    Get Directions
+                  </Button>
+                  {route && (
+                    <Button size="sm" variant="ghost" onClick={() => onClearRoute?.()}>Clear route</Button>
+                  )}
+                </>
+              )}
+            </div>
+            {route && (
+              <div className="rounded border bg-muted/30 p-3 text-sm">
+                <div className="font-medium mb-2">{fmtDuration(route.duration)} • {fmtDistance(route.distance)}</div>
+                <ol className="space-y-1 list-decimal pl-5 max-h-40 overflow-auto">
+                  {route.steps.slice(0, 12).map((s, i) => (
+                    <li key={i} className="text-muted-foreground">
+                      {s.instruction} <span className="text-xs">({fmtDistance(s.distance)})</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+          </div>
 
           <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t">
             {event.ticketUrl && (

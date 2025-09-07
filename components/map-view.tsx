@@ -1,12 +1,12 @@
 "use client"
 
 import "leaflet/dist/leaflet.css"
-import { MapContainer, TileLayer, useMapEvents, Marker, useMap } from "react-leaflet"
+import { MapContainer, TileLayer, useMapEvents, Marker, useMap, Polyline } from "react-leaflet"
 import type { LatLngBounds } from "leaflet"
 import L, { type DivIcon } from "leaflet"
 import { useEffect, useMemo, useRef, useState } from "react"
 import Supercluster from "supercluster"
-import type { ApiEvent } from "@/lib/types"
+import type { ApiEvent, DirectionsRoute } from "@/lib/types"
 import type { GeoJSON } from "geojson"
 
 type Bounds = {
@@ -24,6 +24,7 @@ type Props = {
   initialBounds: Bounds
   loading?: boolean
   userLocation?: { lat: number; lng: number }
+  route?: DirectionsRoute | null
 }
 
 type FeatureProps = { cluster: true; point_count: number; ids: string[] } | { cluster: false; event: ApiEvent }
@@ -59,7 +60,7 @@ function MapViewWrapper(props: Props) {
   return <MapViewComponent {...props} />
 }
 
-function MapViewComponent({ events, onMarkerClick, onClusterClick, onBoundsChange, initialBounds, loading, userLocation }: Props) {
+function MapViewComponent({ events, onMarkerClick, onClusterClick, onBoundsChange, initialBounds, loading, userLocation, route }: Props) {
   const center = useMemo(() => {
     const lat = (initialBounds.minLat + initialBounds.maxLat) / 2
     const lng = (initialBounds.minLng + initialBounds.maxLng) / 2
@@ -70,6 +71,7 @@ function MapViewComponent({ events, onMarkerClick, onClusterClick, onBoundsChang
   const [clusters, setClusters] = useState<Feature[]>([])
   const [useSFBBox, setUseSFBBox] = useState(true)
   const mapRef = useRef<L.Map | null>(null)
+  const hasFitRouteRef = useRef(false)
 
   const isOutsideSF = useMemo(() => {
     if (!userLocation) return false
@@ -91,6 +93,20 @@ function MapViewComponent({ events, onMarkerClick, onClusterClick, onBoundsChang
   }, [events])
 
   const boundsRef = useRef<LatLngBounds | null>(null)
+
+  // Fit to route once when a new route is set
+  useEffect(() => {
+    if (!mapRef.current) return
+    if (!route || !route.coordinates?.length) {
+      hasFitRouteRef.current = false
+      return
+    }
+    if (hasFitRouteRef.current) return
+    const latLngs = route.coordinates.map(([lat, lng]) => L.latLng(lat, lng))
+    const b = L.latLngBounds(latLngs)
+    mapRef.current.fitBounds(b, { padding: [24, 24] })
+    hasFitRouteRef.current = true
+  }, [route])
 
   const computeClusters = (mapBounds?: LatLngBounds, z?: number) => {
     const b = mapBounds ?? boundsRef.current
@@ -223,6 +239,12 @@ function MapViewComponent({ events, onMarkerClick, onClusterClick, onBoundsChang
             interactive={false}
           />
         )}
+        {route && route.coordinates?.length ? (
+          <Polyline
+            positions={route.coordinates.map(([lat, lng]) => [lat, lng]) as any}
+            pathOptions={{ color: "#3b82f6", weight: 5, opacity: 0.85 }}
+          />
+        ) : null}
         <Markers
           clusters={clusters}
           onClusterClick={onClusterClick}
