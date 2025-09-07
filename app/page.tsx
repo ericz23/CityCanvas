@@ -13,7 +13,8 @@ import { Button } from "@/components/ui/button"
 import { RefreshCw, LocateFixed } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable"
-import type { ApiEvent } from "@/lib/types"
+import type { ApiEvent, DirectionsRoute, TravelMode } from "@/lib/types"
+import { buildGoogleMapsDirectionsUrl } from "@/lib/utils"
 
 // Dynamically import MapView to prevent SSR issues with Leaflet
 const MapView = dynamic(() => import("@/components/map-view").then(mod => ({ default: mod.MapView })), {
@@ -58,6 +59,17 @@ export default function Page() {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [isLocating, setIsLocating] = useState(false)
   const geoWatchIdRef = useRef<number | null>(null)
+  const [route, setRoute] = useState<DirectionsRoute | null>(null)
+  const [routeMode, setRouteMode] = useState<TravelMode>("walking")
+  const routeAbortRef = useRef<AbortController | null>(null)
+  const [routeToEventId, setRouteToEventId] = useState<string | null>(null)
+  const mapPanelRef = useRef<HTMLDivElement | null>(null)
+
+  const googleMapsUrl = useMemo(() => {
+    if (!selected?.venue?.lat || !selected?.venue?.lng) return null
+    const dest = { lat: selected.venue.lat, lng: selected.venue.lng }
+    return buildGoogleMapsDirectionsUrl(userLocation ?? undefined, dest, routeMode)
+  }, [selected?.venue?.lat, selected?.venue?.lng, userLocation?.lat, userLocation?.lng, routeMode])
 
   const initialFilters = useMemo<FiltersState>(() => {
     // Initialize filters from URL
@@ -214,10 +226,23 @@ export default function Page() {
   }, [])
 
   const onClusterEventClick = useCallback((event: ApiEvent) => {
+    if (!routeToEventId || routeToEventId !== event.id) {
+      setRoute(null)
+      setRouteToEventId(null)
+    }
     setSelected(event)
     setShowClusterDrawer(false)
     setSelectedFromCluster(true)
-  }, [])
+  }, [routeToEventId])
+
+  const onSelectEvent = useCallback((event: ApiEvent) => {
+    if (!routeToEventId || routeToEventId !== event.id) {
+      setRoute(null)
+      setRouteToEventId(null)
+    }
+    setSelected(event)
+    setSelectedFromCluster(false)
+  }, [routeToEventId])
 
   const onBackToCluster = useCallback(() => {
     setSelected(null)
@@ -266,8 +291,41 @@ export default function Page() {
         navigator.geolocation.clearWatch(geoWatchIdRef.current)
         geoWatchIdRef.current = null
       }
+      if (routeAbortRef.current) routeAbortRef.current.abort()
     }
   }, [])
+
+  const fetchRoute = useCallback(async (event: ApiEvent, mode: TravelMode) => {
+    if (!userLocation) {
+      toast({ title: "Location needed", description: "Enable My Location to get directions.", variant: "destructive" })
+      return
+    }
+    if (!event.venue?.lat || !event.venue?.lng) {
+      toast({ title: "No coordinates", description: "Event has no location to route to.", variant: "destructive" })
+      return
+    }
+    if (routeAbortRef.current) routeAbortRef.current.abort()
+    const controller = new AbortController()
+    routeAbortRef.current = controller
+    try {
+      const params = new URLSearchParams({
+        originLat: String(userLocation.lat),
+        originLng: String(userLocation.lng),
+        destLat: String(event.venue.lat),
+        destLng: String(event.venue.lng),
+        mode,
+      })
+      const res = await fetch(`/api/directions?${params.toString()}`, { signal: controller.signal })
+      if (!res.ok) throw new Error((await res.json())?.error || "Failed to get directions")
+      const data = await res.json()
+      setRoute({ ...data })
+      setRouteToEventId(event.id)
+    } catch (err: any) {
+      if (err?.name === 'AbortError') return
+      console.error("Directions error", err)
+      toast({ title: "Directions error", description: err?.message ?? "Could not fetch directions.", variant: "destructive" })
+    }
+  }, [userLocation, toast])
 
   return (
     <div className="flex h-screen flex-col">
@@ -328,7 +386,7 @@ export default function Page() {
                       events={events}
                       loading={loading}
                       selectedEvent={selected}
-                      onEventSelect={setSelected}
+                      onEventSelect={onSelectEvent}
                     />
                   </div>
                 </section>
@@ -341,18 +399,18 @@ export default function Page() {
           
           {/* Map section */}
           <ResizablePanel>
-            <section className="relative h-full">
+            <section ref={mapPanelRef} className="relative h-full">
               <MapView
                 events={events}
                 onMarkerClick={(event) => {
-                  setSelected(event)
-                  setSelectedFromCluster(false)
+                  onSelectEvent(event)
                 }}
                 onClusterClick={onClusterClick}
                 onBoundsChange={onBoundsChange}
                 initialBounds={SF_DEFAULT_BOUNDS}
                 loading={loading}
                 userLocation={userLocation ?? undefined}
+                route={route}
               />
             </section>
           </ResizablePanel>
@@ -365,6 +423,16 @@ export default function Page() {
         onOpenChange={(o) => !o && setSelected(null)}
         onBackToCluster={onBackToCluster}
         showBackButton={selectedFromCluster}
+        hasUserLocation={!!userLocation}
+        route={route}
+        routeMode={routeMode}
+        onEnableLocation={() => startWatchingLocation()}
+        onSetRouteMode={(m) => setRouteMode(m)}
+        onGetDirections={() => selected && fetchRoute(selected, routeMode)}
+        onClearRoute={() => setRoute(null)}
+        portalContainer={mapPanelRef.current}
+        withinContainer
+        googleMapsUrl={googleMapsUrl ?? undefined}
       />
       <ClusterEventsDrawer 
         events={clusterEvents} 

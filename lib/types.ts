@@ -56,3 +56,20 @@ export type BoundingBox = {
   maxLng: number
   maxLat: number
 }
+
+// Directions & routing types
+export type TravelMode = "walking" | "driving" | "cycling"
+
+export type DirectionsStep = {
+  instruction: string
+  distance: number // meters
+  duration: number // seconds
+}
+
+export type DirectionsRoute = {
+  coordinates: Array<[number, number]> // [lat, lng]
+  distance: number // meters
+  duration: number // seconds
+  steps: DirectionsStep[]
+  mode: TravelMode
+}
