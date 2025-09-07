@@ -14,6 +14,7 @@ import { RefreshCw, LocateFixed } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable"
 import type { ApiEvent, DirectionsRoute, TravelMode } from "@/lib/types"
+import { buildGoogleMapsDirectionsUrl } from "@/lib/utils"
 
 // Dynamically import MapView to prevent SSR issues with Leaflet
 const MapView = dynamic(() => import("@/components/map-view").then(mod => ({ default: mod.MapView })), {
@@ -63,6 +64,12 @@ export default function Page() {
   const routeAbortRef = useRef<AbortController | null>(null)
   const [routeToEventId, setRouteToEventId] = useState<string | null>(null)
   const mapPanelRef = useRef<HTMLDivElement | null>(null)
+
+  const googleMapsUrl = useMemo(() => {
+    if (!selected?.venue?.lat || !selected?.venue?.lng) return null
+    const dest = { lat: selected.venue.lat, lng: selected.venue.lng }
+    return buildGoogleMapsDirectionsUrl(userLocation ?? undefined, dest, routeMode)
+  }, [selected?.venue?.lat, selected?.venue?.lng, userLocation?.lat, userLocation?.lng, routeMode])
 
   const initialFilters = useMemo<FiltersState>(() => {
     // Initialize filters from URL
@@ -425,6 +432,7 @@ export default function Page() {
         onClearRoute={() => setRoute(null)}
         portalContainer={mapPanelRef.current}
         withinContainer
+        googleMapsUrl={googleMapsUrl ?? undefined}
       />
       <ClusterEventsDrawer 
         events={clusterEvents} 

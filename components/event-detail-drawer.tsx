@@ -22,6 +22,7 @@ export function EventDetailDrawer({
   onClearRoute,
   portalContainer,
   withinContainer,
+  googleMapsUrl,
 }: {
   event: ApiEvent | null
   open: boolean
@@ -37,6 +38,7 @@ export function EventDetailDrawer({
   onClearRoute?: () => void
   portalContainer?: HTMLElement | null
   withinContainer?: boolean
+  googleMapsUrl?: string
 }) {
   if (!event) return null
 
@@ -222,7 +224,7 @@ export function EventDetailDrawer({
                 </button>
               </div>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 items-center">
               {!hasUserLocation ? (
                 <>
                   <div className="text-xs text-muted-foreground">Enable location to get directions.</div>
@@ -237,6 +239,13 @@ export function EventDetailDrawer({
                     <Button size="sm" variant="ghost" onClick={() => onClearRoute?.()}>Clear route</Button>
                   )}
                 </>
+              )}
+              {googleMapsUrl && (
+                <Button size="sm" variant="outline" asChild>
+                  <a href={googleMapsUrl} target="_blank" rel="noopener" title="Open in Google Maps">
+                    Open in Google Maps
+                  </a>
+                </Button>
               )}
             </div>
             {route && (
