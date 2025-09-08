@@ -13,7 +13,7 @@ export function Header(props: { right?: React.ReactNode; className?: string }) {
         <MapPin className="h-6 w-6 text-emerald-400" />
         <span className="font-sans">{"SF Event Tracker"}</span>
       </Link>
-      <nav className="hidden md:flex items-center gap-6 text-base font-medium justify-self-center">
+      <nav className="hidden md:flex items-center gap-6 text-lg font-medium justify-self-center">
         <Link href="/" className="text-white/90 hover:text-white transition-colors duration-200">
           {"Map"}
         </Link>
