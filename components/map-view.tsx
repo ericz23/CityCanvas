@@ -166,6 +166,15 @@ function MapViewComponent({ events, onMarkerClick, onClusterClick, onBoundsChang
     setClusters(fc)
   }
 
+  // Recompute clusters when the clustering index updates and the map is ready
+  useEffect(() => {
+    if (!mapRef.current) return
+    const b = mapRef.current.getBounds()
+    boundsRef.current = b
+    const currentZoom = mapRef.current.getZoom()
+    computeClusters(b, currentZoom)
+  }, [index])
+
   function MapEvents() {
     useMapEvents({
       moveend: (e) => {
