@@ -54,6 +54,7 @@ export default function Page() {
   const [selected, setSelected] = useState<ApiEvent | null>(null)
   const [clusterEvents, setClusterEvents] = useState<ApiEvent[]>([])
   const [showClusterDrawer, setShowClusterDrawer] = useState(false)
+  const [selectedClusterKey, setSelectedClusterKey] = useState<string | null>(null)
   const [selectedFromCluster, setSelectedFromCluster] = useState(false)
   const [autoRefreshMs, setAutoRefreshMs] = useState<number>(0)
   const refreshTimerRef = useRef<number | null>(null)
@@ -224,6 +225,7 @@ export default function Page() {
     console.log("Cluster clicked with", events.length, "events")
     setClusterEvents(events)
     setShowClusterDrawer(true)
+    setSelectedClusterKey(`${lng},${lat}`)
   }, [])
 
   const onClusterEventClick = useCallback((event: ApiEvent) => {
@@ -234,6 +236,7 @@ export default function Page() {
     setSelected(event)
     setShowClusterDrawer(false)
     setSelectedFromCluster(true)
+    setSelectedClusterKey(null)
   }, [routeToEventId])
 
   const onSelectEvent = useCallback((event: ApiEvent) => {
@@ -243,6 +246,7 @@ export default function Page() {
     }
     setSelected(event)
     setSelectedFromCluster(false)
+    setSelectedClusterKey(null)
   }, [routeToEventId])
 
   const onBackToCluster = useCallback(() => {
@@ -366,7 +370,7 @@ export default function Page() {
       <main className="flex-1 min-h-0">
         <ResizablePanelGroup direction="horizontal" className="h-full">
           {/* Events list - left */}
-          <ResizablePanel defaultSize={30} minSize={20} maxSize={50}>
+          <ResizablePanel defaultSize={25} minSize={20} maxSize={50}>
             <section className="border-b md:border-b-0 md:border-r bg-muted/30 h-full overflow-hidden">
               <div className="h-full overflow-auto">
                 <EventsPanel
@@ -395,6 +399,8 @@ export default function Page() {
                 loading={loading}
                 userLocation={userLocation ?? undefined}
                 route={route}
+                selectedEventId={selected?.id ?? null}
+                selectedClusterKey={selectedClusterKey}
               />
             </section>
           </ResizablePanel>
@@ -421,7 +427,7 @@ export default function Page() {
       <ClusterEventsDrawer 
         events={clusterEvents} 
         open={showClusterDrawer} 
-        onOpenChange={setShowClusterDrawer}
+        onOpenChange={(o) => { setShowClusterDrawer(o); if (!o) setSelectedClusterKey(null) }}
         onEventClick={onClusterEventClick}
         portalContainer={mapPanelRef.current}
         withinContainer

@@ -89,7 +89,7 @@ export function EventDetailDrawer({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" portalContainer={portalContainer} withinContainer={withinContainer} className="w-full sm:w-1/2 min-w-[20rem] max-w-none sm:max-w-none overflow-y-auto animate-in slide-in-from-right duration-300 z-[1000]">
+      <SheetContent side="right" portalContainer={portalContainer} withinContainer={withinContainer} className="w-full sm:w-2/5 min-w-[20rem] max-w-none sm:max-w-none overflow-y-auto animate-in slide-in-from-right duration-300 z-[1000]">
         <div className="space-y-6 p-6">
           {showBackButton && onBackToCluster && (
             <Button
