@@ -25,6 +25,9 @@ type Props = {
   loading?: boolean
   userLocation?: { lat: number; lng: number }
   route?: DirectionsRoute | null
+  selectedEventId?: string | null
+  selectedClusterKey?: string | null
+  recenterNonce?: number
 }
 
 type FeatureProps = { cluster: true; point_count: number; ids: string[] } | { cluster: false; event: ApiEvent }
@@ -60,7 +63,7 @@ function MapViewWrapper(props: Props) {
   return <MapViewComponent {...props} />
 }
 
-function MapViewComponent({ events, onMarkerClick, onClusterClick, onBoundsChange, initialBounds, loading, userLocation, route }: Props) {
+function MapViewComponent({ events, onMarkerClick, onClusterClick, onBoundsChange, initialBounds, loading, userLocation, route, selectedEventId, selectedClusterKey, recenterNonce }: Props) {
   const center = useMemo(() => {
     const lat = (initialBounds.minLat + initialBounds.maxLat) / 2
     const lng = (initialBounds.minLng + initialBounds.maxLng) / 2
@@ -72,6 +75,12 @@ function MapViewComponent({ events, onMarkerClick, onClusterClick, onBoundsChang
   const [useSFBBox, setUseSFBBox] = useState(true)
   const mapRef = useRef<L.Map | null>(null)
   const hasFitRouteRef = useRef(false)
+  const lastCenteredEventIdRef = useRef<string | null>(null)
+  const lastCenteredClusterKeyRef = useRef<string | null>(null)
+  const originalViewRef = useRef<{ center: L.LatLng; zoom: number } | null>(null)
+  const hasSnapshotRef = useRef(false)
+  const userInteractedSinceSnapshotRef = useRef(false)
+  const isProgrammaticMoveRef = useRef(false)
 
   const isOutsideSF = useMemo(() => {
     if (!userLocation) return false
@@ -87,7 +96,7 @@ function MapViewComponent({ events, onMarkerClick, onClusterClick, onBoundsChang
   // Build clustering index
   const index = useMemo(() => {
     const pts = events.filter((e) => e.venue?.lat != null && e.venue?.lng != null).map(toFeature)
-    const sc = new Supercluster<FeatureProps>({ radius: 60, maxZoom: 18 })
+    const sc = new Supercluster<FeatureProps>({ radius: 40, maxZoom: 18 })
     sc.load(pts as any)
     return sc
   }, [events])
@@ -175,6 +184,109 @@ function MapViewComponent({ events, onMarkerClick, onClusterClick, onBoundsChang
     computeClusters(b, currentZoom)
   }, [index])
 
+  // Center map on selected event when selection changes (only once per selection)
+  useEffect(() => {
+    if (!selectedEventId) {
+      lastCenteredEventIdRef.current = null
+      return
+    }
+    if (lastCenteredEventIdRef.current === selectedEventId) return
+    if (!mapRef.current) return
+    // Snapshot original view before first recenter
+    if (!hasSnapshotRef.current) {
+      const currentCenter = mapRef.current.getCenter()
+      const currentZoom = mapRef.current.getZoom()
+      originalViewRef.current = { center: currentCenter, zoom: currentZoom }
+      hasSnapshotRef.current = true
+    }
+    const ev = events.find(e => e.id === selectedEventId)
+    const lat = ev?.venue?.lat
+    const lng = ev?.venue?.lng
+    if (lat == null || lng == null) return
+    const current = mapRef.current.getZoom()
+    const targetZoom = Math.max(current ?? 12, 13)
+    isProgrammaticMoveRef.current = true
+    mapRef.current.setView([lat, lng], targetZoom, { animate: true })
+    lastCenteredEventIdRef.current = selectedEventId
+  }, [selectedEventId, events])
+
+  // Restore original view when both event and cluster selections clear
+  useEffect(() => {
+    if (selectedEventId != null || selectedClusterKey != null) return
+    if (!mapRef.current) return
+    if (!hasSnapshotRef.current || !originalViewRef.current) {
+      lastCenteredEventIdRef.current = null
+      lastCenteredClusterKeyRef.current = null
+      return
+    }
+    if (!userInteractedSinceSnapshotRef.current) {
+      const { center, zoom } = originalViewRef.current
+      isProgrammaticMoveRef.current = true
+      mapRef.current.setView(center, zoom, { animate: true })
+    }
+    originalViewRef.current = null
+    hasSnapshotRef.current = false
+    userInteractedSinceSnapshotRef.current = false
+    lastCenteredEventIdRef.current = null
+    lastCenteredClusterKeyRef.current = null
+  }, [selectedEventId, selectedClusterKey])
+
+  // Center map on selected cluster when cluster selection changes (simple center+zoom)
+  useEffect(() => {
+    if (!selectedClusterKey) {
+      lastCenteredClusterKeyRef.current = null
+      return
+    }
+    if (!mapRef.current) return
+    if (lastCenteredClusterKeyRef.current === selectedClusterKey) return
+    // Snapshot original view before first recenter (if not already snapshotted by event selection)
+    if (!hasSnapshotRef.current) {
+      const currentCenter = mapRef.current.getCenter()
+      const currentZoom = mapRef.current.getZoom()
+      originalViewRef.current = { center: currentCenter, zoom: currentZoom }
+      hasSnapshotRef.current = true
+    }
+    const [lngStr, latStr] = selectedClusterKey.split(",")
+    const lat = Number(latStr)
+    const lng = Number(lngStr)
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
+    const current = mapRef.current.getZoom()
+    const targetZoom = Math.max(current ?? 12, 13)
+    isProgrammaticMoveRef.current = true
+    mapRef.current.setView([lat, lng], targetZoom, { animate: true })
+    lastCenteredClusterKeyRef.current = selectedClusterKey
+  }, [selectedClusterKey])
+
+  // Manual recenter requests (from drawers)
+  useEffect(() => {
+    if (!recenterNonce) return
+    if (!mapRef.current) return
+    // Prefer event if present, else cluster
+    if (selectedEventId) {
+      const ev = events.find(e => e.id === selectedEventId)
+      const lat = ev?.venue?.lat
+      const lng = ev?.venue?.lng
+      if (lat != null && lng != null) {
+        const current = mapRef.current.getZoom()
+        const targetZoom = Math.max(current ?? 12, 13)
+        isProgrammaticMoveRef.current = true
+        mapRef.current.setView([lat, lng], targetZoom, { animate: true })
+        return
+      }
+    }
+    if (selectedClusterKey) {
+      const [lngStr, latStr] = selectedClusterKey.split(",")
+      const lat = Number(latStr)
+      const lng = Number(lngStr)
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        const current = mapRef.current.getZoom()
+        const targetZoom = Math.max(current ?? 12, 13)
+        isProgrammaticMoveRef.current = true
+        mapRef.current.setView([lat, lng], targetZoom, { animate: true })
+      }
+    }
+  }, [recenterNonce])
+
   function MapEvents() {
     useMapEvents({
       moveend: (e) => {
@@ -189,6 +301,11 @@ function MapViewComponent({ events, onMarkerClick, onClusterClick, onBoundsChang
         })
         setZoom(map.getZoom())
         computeClusters(b, map.getZoom())
+        if (isProgrammaticMoveRef.current) {
+          isProgrammaticMoveRef.current = false
+        } else if (hasSnapshotRef.current) {
+          userInteractedSinceSnapshotRef.current = true
+        }
       },
       zoomend: (e) => {
         const map = e.target
@@ -196,6 +313,11 @@ function MapViewComponent({ events, onMarkerClick, onClusterClick, onBoundsChang
         boundsRef.current = b
         setZoom(map.getZoom())
         computeClusters(b, map.getZoom())
+        if (isProgrammaticMoveRef.current) {
+          isProgrammaticMoveRef.current = false
+        } else if (hasSnapshotRef.current) {
+          userInteractedSinceSnapshotRef.current = true
+        }
       },
       load: (e) => {
         const map = e.target
@@ -258,6 +380,8 @@ function MapViewComponent({ events, onMarkerClick, onClusterClick, onBoundsChang
           clusters={clusters}
           onClusterClick={onClusterClick}
           onPointClick={(ev) => onMarkerClick(ev)}
+          selectedEventId={selectedEventId ?? null}
+          selectedClusterKey={selectedClusterKey ?? null}
         />
       </MapContainer>
       {userLocation && isOutsideSF && useSFBBox && (
@@ -309,10 +433,14 @@ function Markers({
   clusters,
   onClusterClick,
   onPointClick,
+  selectedEventId,
+  selectedClusterKey,
 }: {
   clusters: Feature[]
   onClusterClick: (lat: number, lng: number, zoom: number, events: ApiEvent[]) => void
   onPointClick: (ev: ApiEvent) => void
+  selectedEventId: string | null
+  selectedClusterKey: string | null
 }) {
   
   return (
@@ -323,11 +451,14 @@ function Markers({
         if ((f.properties as any).cluster) {
           const count = (f.properties as any).point_count as number
           const clusterEvents = (f.properties as any).events as ApiEvent[] || []
+          const containsSelected = selectedEventId != null && clusterEvents.some(e => e.id === selectedEventId)
+          const isExplicitlySelected = selectedClusterKey != null && `${lng},${lat}` === selectedClusterKey
           return (
             <Marker
               key={`cluster-${index}`}
               position={[lat, lng]}
-              icon={clusterIcon(count)}
+              icon={(containsSelected || isExplicitlySelected) ? selectedClusterIcon(count) : clusterIcon(count)}
+              zIndexOffset={(containsSelected || isExplicitlySelected) ? 900 : 0}
               eventHandlers={{
                 click: () => {
                   console.log("Cluster clicked with", count, "points")
@@ -338,11 +469,13 @@ function Markers({
           )
         } else {
           const ev = (f.properties as any).event as ApiEvent
+          const isSelected = selectedEventId != null && ev.id === selectedEventId
           return (
             <Marker
               key={`event-${ev.id}`}
               position={[lat, lng]}
-              icon={pinIcon()}
+              icon={isSelected ? selectedPinIcon() : pinIcon()}
+              zIndexOffset={isSelected ? 1000 : 0}
               eventHandlers={{
                 click: () => {
                   console.log("Event marker clicked:", ev.title)
@@ -370,6 +503,18 @@ function clusterIcon(count: number): DivIcon {
   return L.divIcon({ html, className: "cluster-icon", iconSize: [size, size] as any })
 }
 
+function selectedClusterIcon(count: number): DivIcon {
+  const size = count < 10 ? 28 : count < 50 ? 34 : 42
+  const ring = "ring-2 ring-white"
+  const html = `
+    <div class="bg-blue-600 ${ring} text-white rounded-full flex items-center justify-center shadow-md"
+         style="width:${size}px;height:${size}px;font-size:12px;">
+      ${count}
+    </div>
+  `
+  return L.divIcon({ html, className: "cluster-icon-selected", iconSize: [size, size] as any })
+}
+
 function pinIcon(): DivIcon {
   const html = `
     <div class="relative cursor-pointer">
@@ -386,6 +531,32 @@ function pinIcon(): DivIcon {
     iconSize: [24, 32] as any,
     iconAnchor: [12, 32] as any,
     popupAnchor: [0, -32] as any
+  })
+}
+
+function selectedPinIcon(): DivIcon {
+  const html = `
+    <div class="relative cursor-pointer">
+      <svg width="28" height="36" viewBox="0 0 24 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <style>
+            @keyframes pulse { 0% { transform: scale(1); opacity: 0.6; } 70% { transform: scale(1.6); opacity: 0; } 100% { transform: scale(1.6); opacity: 0; } }
+          </style>
+        </defs>
+        <path d="M12 0C5.373 0 0 5.373 0 12c0 9 12 20 12 20s12-11 12-20c0-6.627-5.373-12-12-12z" fill="#2563eb"/>
+        <circle cx="12" cy="12" r="6" fill="white"/>
+        <circle cx="12" cy="12" r="4" fill="#2563eb"/>
+      </svg>
+      <span style="position:absolute;left:50%;top:100%;width:8px;height:8px;margin-left:-4px;border-radius:9999px;background:#2563eb;opacity:.6"></span>
+      <span style="position:absolute;left:50%;top:100%;width:8px;height:8px;margin-left:-4px;border-radius:9999px;background:#2563eb;animation:pulse 1.5s ease-out infinite"></span>
+    </div>
+  `
+  return L.divIcon({ 
+    html, 
+    className: "pin-icon-selected", 
+    iconSize: [28, 36] as any,
+    iconAnchor: [14, 36] as any,
+    popupAnchor: [0, -36] as any
   })
 }
 
