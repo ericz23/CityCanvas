@@ -14,6 +14,7 @@ export function ClusterEventsDrawer({
   onEventClick,
   portalContainer,
   withinContainer,
+  onCenterOnSelectedCluster,
 }: {
   events: ApiEvent[]
   open: boolean
@@ -21,6 +22,7 @@ export function ClusterEventsDrawer({
   onEventClick: (event: ApiEvent) => void
   portalContainer?: HTMLElement | null
   withinContainer?: boolean
+  onCenterOnSelectedCluster?: () => void
 }) {
   if (!events || events.length === 0) return null
 
@@ -56,8 +58,8 @@ export function ClusterEventsDrawer({
   const venueName = events[0]?.venue?.name || "Multiple venues"
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" portalContainer={portalContainer} withinContainer={withinContainer} className="w-full sm:w-2/5 min-w-[20rem] max-w-none sm:max-w-none overflow-y-auto animate-in slide-in-from-right duration-300 z-[1000]">
+    <Sheet open={open} onOpenChange={onOpenChange} modal={false}>
+      <SheetContent side="right" portalContainer={portalContainer} withinContainer={withinContainer} overlayPassThrough className="w-full sm:w-2/5 min-w-[20rem] max-w-none sm:max-w-none overflow-y-auto animate-in slide-in-from-right duration-300 z-[1000]">
         <div className="space-y-6 p-6">
           <SheetHeader className="text-left">
             <SheetTitle className="text-2xl font-bold">
@@ -70,6 +72,11 @@ export function ClusterEventsDrawer({
               </div>
             </div>
           </SheetHeader>
+          <div>
+            <Button size="sm" variant="outline" onClick={() => onCenterOnSelectedCluster?.()}>
+              Center on selected cluster
+            </Button>
+          </div>
 
           <div className="space-y-4">
             {events.map((event, index) => (

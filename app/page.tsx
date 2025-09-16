@@ -66,6 +66,7 @@ export default function Page() {
   const routeAbortRef = useRef<AbortController | null>(null)
   const [routeToEventId, setRouteToEventId] = useState<string | null>(null)
   const mapPanelRef = useRef<HTMLDivElement | null>(null)
+  const [recenterNonce, setRecenterNonce] = useState(0)
 
   const googleMapsUrl = useMemo(() => {
     if (!selected?.venue?.lat || !selected?.venue?.lng) return null
@@ -401,6 +402,7 @@ export default function Page() {
                 route={route}
                 selectedEventId={selected?.id ?? null}
                 selectedClusterKey={selectedClusterKey}
+                recenterNonce={recenterNonce}
               />
             </section>
           </ResizablePanel>
@@ -422,6 +424,10 @@ export default function Page() {
         onClearRoute={() => setRoute(null)}
         portalContainer={mapPanelRef.current}
         withinContainer
+        onCenterOnSelected={() => {
+          if (!selected?.venue?.lat || !selected?.venue?.lng) return
+          setRecenterNonce((n) => n + 1)
+        }}
         googleMapsUrl={googleMapsUrl ?? undefined}
       />
       <ClusterEventsDrawer 
@@ -431,6 +437,10 @@ export default function Page() {
         onEventClick={onClusterEventClick}
         portalContainer={mapPanelRef.current}
         withinContainer
+        onCenterOnSelectedCluster={() => {
+          if (!selectedClusterKey) return
+          setRecenterNonce((n) => n + 1)
+        }}
       />
     </div>
   )

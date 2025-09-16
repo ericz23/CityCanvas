@@ -27,6 +27,7 @@ type Props = {
   route?: DirectionsRoute | null
   selectedEventId?: string | null
   selectedClusterKey?: string | null
+  recenterNonce?: number
 }
 
 type FeatureProps = { cluster: true; point_count: number; ids: string[] } | { cluster: false; event: ApiEvent }
@@ -62,7 +63,7 @@ function MapViewWrapper(props: Props) {
   return <MapViewComponent {...props} />
 }
 
-function MapViewComponent({ events, onMarkerClick, onClusterClick, onBoundsChange, initialBounds, loading, userLocation, route, selectedEventId, selectedClusterKey }: Props) {
+function MapViewComponent({ events, onMarkerClick, onClusterClick, onBoundsChange, initialBounds, loading, userLocation, route, selectedEventId, selectedClusterKey, recenterNonce }: Props) {
   const center = useMemo(() => {
     const lat = (initialBounds.minLat + initialBounds.maxLat) / 2
     const lng = (initialBounds.minLng + initialBounds.maxLng) / 2
@@ -78,6 +79,8 @@ function MapViewComponent({ events, onMarkerClick, onClusterClick, onBoundsChang
   const lastCenteredClusterKeyRef = useRef<string | null>(null)
   const originalViewRef = useRef<{ center: L.LatLng; zoom: number } | null>(null)
   const hasSnapshotRef = useRef(false)
+  const userInteractedSinceSnapshotRef = useRef(false)
+  const isProgrammaticMoveRef = useRef(false)
 
   const isOutsideSF = useMemo(() => {
     if (!userLocation) return false
@@ -202,6 +205,7 @@ function MapViewComponent({ events, onMarkerClick, onClusterClick, onBoundsChang
     if (lat == null || lng == null) return
     const current = mapRef.current.getZoom()
     const targetZoom = Math.max(current ?? 12, 13)
+    isProgrammaticMoveRef.current = true
     mapRef.current.setView([lat, lng], targetZoom, { animate: true })
     lastCenteredEventIdRef.current = selectedEventId
   }, [selectedEventId, events])
@@ -215,10 +219,14 @@ function MapViewComponent({ events, onMarkerClick, onClusterClick, onBoundsChang
       lastCenteredClusterKeyRef.current = null
       return
     }
-    const { center, zoom } = originalViewRef.current
-    mapRef.current.setView(center, zoom, { animate: true })
+    if (!userInteractedSinceSnapshotRef.current) {
+      const { center, zoom } = originalViewRef.current
+      isProgrammaticMoveRef.current = true
+      mapRef.current.setView(center, zoom, { animate: true })
+    }
     originalViewRef.current = null
     hasSnapshotRef.current = false
+    userInteractedSinceSnapshotRef.current = false
     lastCenteredEventIdRef.current = null
     lastCenteredClusterKeyRef.current = null
   }, [selectedEventId, selectedClusterKey])
@@ -244,9 +252,40 @@ function MapViewComponent({ events, onMarkerClick, onClusterClick, onBoundsChang
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
     const current = mapRef.current.getZoom()
     const targetZoom = Math.max(current ?? 12, 13)
+    isProgrammaticMoveRef.current = true
     mapRef.current.setView([lat, lng], targetZoom, { animate: true })
     lastCenteredClusterKeyRef.current = selectedClusterKey
   }, [selectedClusterKey])
+
+  // Manual recenter requests (from drawers)
+  useEffect(() => {
+    if (!recenterNonce) return
+    if (!mapRef.current) return
+    // Prefer event if present, else cluster
+    if (selectedEventId) {
+      const ev = events.find(e => e.id === selectedEventId)
+      const lat = ev?.venue?.lat
+      const lng = ev?.venue?.lng
+      if (lat != null && lng != null) {
+        const current = mapRef.current.getZoom()
+        const targetZoom = Math.max(current ?? 12, 13)
+        isProgrammaticMoveRef.current = true
+        mapRef.current.setView([lat, lng], targetZoom, { animate: true })
+        return
+      }
+    }
+    if (selectedClusterKey) {
+      const [lngStr, latStr] = selectedClusterKey.split(",")
+      const lat = Number(latStr)
+      const lng = Number(lngStr)
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        const current = mapRef.current.getZoom()
+        const targetZoom = Math.max(current ?? 12, 13)
+        isProgrammaticMoveRef.current = true
+        mapRef.current.setView([lat, lng], targetZoom, { animate: true })
+      }
+    }
+  }, [recenterNonce])
 
   function MapEvents() {
     useMapEvents({
@@ -262,6 +301,11 @@ function MapViewComponent({ events, onMarkerClick, onClusterClick, onBoundsChang
         })
         setZoom(map.getZoom())
         computeClusters(b, map.getZoom())
+        if (isProgrammaticMoveRef.current) {
+          isProgrammaticMoveRef.current = false
+        } else if (hasSnapshotRef.current) {
+          userInteractedSinceSnapshotRef.current = true
+        }
       },
       zoomend: (e) => {
         const map = e.target
@@ -269,6 +313,11 @@ function MapViewComponent({ events, onMarkerClick, onClusterClick, onBoundsChang
         boundsRef.current = b
         setZoom(map.getZoom())
         computeClusters(b, map.getZoom())
+        if (isProgrammaticMoveRef.current) {
+          isProgrammaticMoveRef.current = false
+        } else if (hasSnapshotRef.current) {
+          userInteractedSinceSnapshotRef.current = true
+        }
       },
       load: (e) => {
         const map = e.target
