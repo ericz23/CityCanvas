@@ -224,6 +224,11 @@ export default function Page() {
 
   const onClusterClick = useCallback((lat: number, lng: number, zoom: number, events: ApiEvent[]) => {
     console.log("Cluster clicked with", events.length, "events")
+    // Replace any open event drawer
+    setSelected(null)
+    setSelectedFromCluster(false)
+    setRoute(null)
+    setRouteToEventId(null)
     setClusterEvents(events)
     setShowClusterDrawer(true)
     setSelectedClusterKey(`${lng},${lat}`)
@@ -245,6 +250,8 @@ export default function Page() {
       setRoute(null)
       setRouteToEventId(null)
     }
+    // Replace any open cluster drawer
+    setShowClusterDrawer(false)
     setSelected(event)
     setSelectedFromCluster(false)
     setSelectedClusterKey(null)
