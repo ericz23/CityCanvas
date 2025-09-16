@@ -286,11 +286,6 @@ export function EventDetailDrawer({
                 </Link>
               </Button>
             )}
-            <Button variant="outline" asChild className="flex-1">
-              <Link href={`/event/${event.id}`}>
-                Full Details
-              </Link>
-            </Button>
           </div>
         </div>
       </SheetContent>
